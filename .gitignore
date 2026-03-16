@@ -1,14 +1,32 @@
-# Test Complete ignore files: https://support.smartbear.com/viewarticle/68002/
+# Virtual environments
+venv/
+ENV/
+env/
+.env
 
-# Tester-specific Settings
-*.tcCFGExtender
-*.tcLS
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
 
-# Type library declarations
-*.tlb
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.spec
 
-# Log files
-*.tcLogs
+# Flet / desktop specific
+.flet/
+cache/
 
-# Backup files
-*.bak
+# Logs & temp
+*.log
+*.tmp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Local config (never commit real API keys or secrets)
+.env.local

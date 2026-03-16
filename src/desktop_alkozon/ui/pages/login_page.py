@@ -5,13 +5,14 @@ class LoginPage(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__(
             padding=40,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment(0.5, 0.5),
         )
-        self._page = page  
+        self._page = page
         self.setup_logger = setup_logger
+
         self.content = ft.Column(
             controls=[
-                ft.Text("AlkozOn Desktop", size=32, weight=ft.FontWeight.BOLD),
+                ft.Text("Alkozon Desktop", size=32, weight=ft.FontWeight.BOLD),
                 ft.Text("Log in to access warehouse, deliveries & employees", size=16),
                 ft.Divider(),
                 # Username
@@ -19,7 +20,7 @@ class LoginPage(ft.Container):
                     label="Username / Email",
                     width=400,
                     border_radius=8,
-                    prefix_icon=ft.icons.PERSON,
+                    prefix_icon=ft.Icons.PERSON,
                 ),
                 # Password
                 ft.TextField(
@@ -28,11 +29,11 @@ class LoginPage(ft.Container):
                     can_reveal_password=True,
                     width=400,
                     border_radius=8,
-                    prefix_icon=ft.icons.LOCK,
+                    prefix_icon=ft.Icons.LOCK,
                 ),
-                # Login button
+                # Login button 
                 ft.ElevatedButton(
-                    text="LOGIN",
+                    content=ft.Text("LOGIN"),
                     width=400,
                     style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
                     on_click=self.login_clicked,
@@ -44,8 +45,7 @@ class LoginPage(ft.Container):
         )
 
     def login_clicked(self, e):
-        """Placeholder – next step connects to core/auth.py + API."""
+        """Placeholder"""
         self._page.show_snack_bar(
             ft.SnackBar(ft.Text("Login successful (demo)"), duration=2000)
         )
-        # TODO: later → call core/auth.py, check 2FA, load dashboard

@@ -7,4 +7,4 @@ def setup_logger():
         handlers=[logging.StreamHandler()],
     )
     logger = logging.getLogger("desktop_alkozon")
-    logger.info("Logger initialized – ready for security events")
+    logger.info("Logger initialized – security events ready")
