@@ -3,6 +3,7 @@ from desktop_alkozon.core.auth import AuthService
 from desktop_alkozon.core.logger import setup_logger
 
 class LoginPage(ft.Container):
+   
     def __init__(self, page: ft.Page):
         super().__init__(
             padding=40,
@@ -72,21 +73,26 @@ class LoginPage(ft.Container):
 
         if success:
             snack = ft.SnackBar(
-                content=ft.Text("Login successful (demo mode)"),
-                duration=3000,
+                content=ft.Text("Login successful"),
+                duration=2000,
                 action="OK"
             )
             self._page.overlay.append(snack)
             snack.open = True
             self._page.update()
+            from desktop_alkozon.features.warehouse.views import WarehouseView
+            self._page.clean()                    
+            self._page.add(WarehouseView(self._page))  
+            self._page.update()
+
         else:
             if self.auth.is_locked():
                 snack = ft.SnackBar(
-                    content=ft.Text("Account locked after 5 failed attempts. Restart the app to try again."),
+                    content=ft.Text("Account locked after 5 failed attempts. Restart the app."),
                     duration=5000,
                     action="OK"
                 )
-                self.login_button.disabled = True  
+                self.login_button.disabled = True
             else:
                 remaining = max(0, 5 - self.auth.attempts)
                 snack = ft.SnackBar(

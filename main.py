@@ -15,7 +15,7 @@ def main(page: ft.Page):
     login_page = LoginPage(page)
     page.add(login_page)
 
-    setup_logger()  
+    setup_logger()
 
 if __name__ == "__main__":
-    ft.run(main)  
+    ft.run(main)
