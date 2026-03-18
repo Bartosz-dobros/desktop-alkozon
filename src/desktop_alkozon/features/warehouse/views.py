@@ -66,6 +66,11 @@ class WarehouseView(ft.Container):
                 ft.Divider(),
                 ft.Text("Zamów nowy towar", size=18, weight=ft.FontWeight.BOLD),
                 self.form,
+                ft.ElevatedButton(
+                    "Powrót do menu głównego",
+                    width=400,
+                    on_click=self._go_to_menu,
+                ),
             ],
             spacing=20,
         )
@@ -133,3 +138,9 @@ class WarehouseView(ft.Container):
             self._page.overlay.append(snack)
             snack.open = True
             self._page.update()
+
+    def _go_to_menu(self, e):
+        from desktop_alkozon.ui.pages.main_menu import MainMenuView
+        self._page.clean()
+        self._page.add(MainMenuView(self._page))
+        self._page.update()

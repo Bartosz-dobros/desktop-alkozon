@@ -80,9 +80,9 @@ class LoginPage(ft.Container):
             self._page.overlay.append(snack)
             snack.open = True
             self._page.update()
-            from desktop_alkozon.features.warehouse.views import WarehouseView
-            self._page.clean()                    
-            self._page.add(WarehouseView(self._page))  
+            from desktop_alkozon.ui.pages.main_menu import MainMenuView
+            self._page.clean()
+            self._page.add(MainMenuView(self._page))
             self._page.update()
 
         else:
