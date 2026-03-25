@@ -1,5 +1,6 @@
 import flet as ft
 from desktop_alkozon.features.deliveries.controller import DeliveriesController
+from desktop_alkozon.core.auth import auth_service
 
 class DeliveriesView(ft.Container):
     def __init__(self, page: ft.Page):
@@ -106,6 +107,7 @@ class DeliveriesView(ft.Container):
         self._page.update()
 
     def create_announcement_clicked(self, e):
+        auth_service.update_activity()
         if not (self.courier_dropdown.value and self.destination_field.value.strip() and self.announcement_field.value.strip()):
             snack = ft.SnackBar(content=ft.Text("Wypełnij wszystkie pola"), duration=2000)
             self._page.overlay.append(snack)

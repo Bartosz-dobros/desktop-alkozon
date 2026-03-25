@@ -1,5 +1,6 @@
 import flet as ft
 from desktop_alkozon.features.warehouse.controller import WarehouseController
+from desktop_alkozon.core.auth import auth_service
 
 class WarehouseView(ft.Container):
     def __init__(self, page: ft.Page):
@@ -94,6 +95,7 @@ class WarehouseView(ft.Container):
         self._page.update()
 
     def add_item_clicked(self, e):
+        auth_service.update_activity()
         if not (self.name_field.value and self.name_field.value.strip() and
                 self.quantity_field.value and self.quantity_field.value.strip() and
                 self.unit_field.value and self.unit_field.value.strip() and

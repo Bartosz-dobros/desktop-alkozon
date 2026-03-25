@@ -1,5 +1,6 @@
 import flet as ft
 from desktop_alkozon.features.employees.controller import EmployeesController
+from desktop_alkozon.core.auth import auth_service
 
 class EmployeesView(ft.Container):
     def __init__(self, page: ft.Page):
@@ -68,7 +69,8 @@ class EmployeesView(ft.Container):
 
     def post_offer_clicked(self, e):
         if not (self.title_field.value and self.salary_field.value):
-            snack = ft.SnackBar(content=ft.Text("❌ Wypełnij wszystkie pola"), duration=2000)
+            auth_service.update_activity()
+            snack = ft.SnackBar(content=ft.Text("Wypełnij wszystkie pola"), duration=2000)
             self._page.overlay.append(snack)
             snack.open = True
             self._page.update()
