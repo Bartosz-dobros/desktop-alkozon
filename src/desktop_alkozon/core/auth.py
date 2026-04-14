@@ -46,7 +46,9 @@ class AuthService:
             
             self.attempts = 0
             self.update_activity()
-            keyring.set_password("desktop_alkozon", "auth_token", "mock_token_123")
+            token = keyring.get_password("desktop_alkozon", "auth_token")
+            if not token:
+                keyring.set_password("desktop_alkozon", "auth_token", "mock_token_123")
             return True
         return False
 
@@ -61,5 +63,21 @@ class AuthService:
             keyring.delete_password("desktop_alkozon", "auth_token")
             return True
         return False
+
+    def logout(self):
+        keyring.delete_password("desktop_alkozon", "auth_token")
+        self.attempts = 0
+        self.locked = False
+
+    def is_authenticated(self) -> bool:
+        token = keyring.get_password("desktop_alkozon", "auth_token")
+        return token is not None and len(token) > 0
+
+    def refresh_token(self, new_token: str):
+        keyring.set_password("desktop_alkozon", "auth_token", new_token)
+
+    def unlock(self):
+        self.locked = False
+        self.attempts = 0
 
 auth_service = AuthService()
