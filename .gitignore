@@ -15,6 +15,7 @@ build/
 dist/
 *.egg-info/
 *.spec
+*.egg
 
 # Flet / desktop specific
 .flet/
