@@ -2,86 +2,57 @@ import flet as ft
 from desktop_alkozon.features.warehouse.controller import WarehouseController
 from desktop_alkozon.core.auth import auth_service
 
-class WarehouseView(ft.Container):
-    def __init__(self, page: ft.Page):
-        super().__init__(padding=20)
-        self._page = page
-        self.controller = WarehouseController()
 
-        self.table = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("ID")),
-                ft.DataColumn(ft.Text("Nazwa towaru")),
-                ft.DataColumn(ft.Text("Ilość")),
-                ft.DataColumn(ft.Text("Jednostka")),
-                ft.DataColumn(ft.Text("Cena")),
-            ],
-            rows=[],
-        )
+def create_warehouse_view(page: ft.Page) -> ft.Container:
+    controller = WarehouseController()
+    items = []
 
-        self.name_field = ft.TextField(
-            label="Nazwa towaru",
-            width=300,
-            max_length=100,
-            text_size=14,
-        )
-        self.quantity_field = ft.TextField(
-            label="Ilość",
-            width=120,
-            max_length=5,
-            input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$"),
-            keyboard_type=ft.KeyboardType.NUMBER,
-            text_size=14,
-        )
-        self.unit_field = ft.TextField(
-            label="Jednostka",
-            width=100,
-            value="szt.",
-            max_length=10,
-            text_size=14,
-        )
-        self.price_field = ft.TextField(
-            label="Cena",
-            width=120,
-            max_length=10,
-            input_filter=ft.InputFilter(allow=True, regex_string=r"^\d*\.?\d*$"),
-            keyboard_type=ft.KeyboardType.NUMBER,
-            text_size=14,
-        )
+    table = ft.DataTable(
+        columns=[
+            ft.DataColumn(ft.Text("ID")),
+            ft.DataColumn(ft.Text("Nazwa towaru")),
+            ft.DataColumn(ft.Text("Ilość")),
+            ft.DataColumn(ft.Text("Jednostka")),
+            ft.DataColumn(ft.Text("Cena")),
+        ],
+        rows=[],
+    )
+    table_loading = ft.ProgressRing(visible=False)
 
-        self.form = ft.Row(
-            controls=[
-                self.name_field,
-                self.quantity_field,
-                self.unit_field,
-                self.price_field,
-                ft.ElevatedButton("Zamów nowy towar", on_click=self.add_item_clicked),
-            ],
-            spacing=10,
-        )
+    name_field = ft.TextField(
+        label="Nazwa towaru",
+        width=300,
+        max_length=100,
+        text_size=14,
+    )
+    quantity_field = ft.TextField(
+        label="Ilość",
+        width=120,
+        max_length=5,
+        input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$"),
+        keyboard_type=ft.KeyboardType.NUMBER,
+        text_size=14,
+    )
+    unit_field = ft.TextField(
+        label="Jednostka",
+        width=100,
+        value="szt.",
+        max_length=10,
+        text_size=14,
+    )
+    price_field = ft.TextField(
+        label="Cena",
+        width=120,
+        max_length=10,
+        input_filter=ft.InputFilter(allow=True, regex_string=r"^\d*\.?\d*$"),
+        keyboard_type=ft.KeyboardType.NUMBER,
+        text_size=14,
+    )
 
-        self.content = ft.Column(
-            controls=[
-                ft.Text("Stan magazynu", size=24, weight=ft.FontWeight.BOLD),
-                self.table,
-                ft.Divider(),
-                ft.Text("Zamów nowy towar", size=18, weight=ft.FontWeight.BOLD),
-                self.form,
-                ft.ElevatedButton(
-                    "Powrót do menu głównego",
-                    width=400,
-                    on_click=self._go_to_menu,
-                ),
-            ],
-            spacing=20,
-        )
-
-        self.refresh_table()
-
-    def refresh_table(self):
-        self.table.rows.clear()
-        for item in self.controller.get_stock_data():
-            self.table.rows.append(
+    def refresh_table():
+        table.rows.clear()
+        for item in items:
+            table.rows.append(
                 ft.DataRow(
                     cells=[
                         ft.DataCell(ft.Text(str(item.id))),
@@ -92,57 +63,94 @@ class WarehouseView(ft.Container):
                     ]
                 )
             )
-        self._page.update()
 
-    def add_item_clicked(self, e):
+    async def load_data():
+        nonlocal items
+        try:
+            table_loading.visible = True
+            page.update()
+            
+            items = await controller.get_stock_data()
+            refresh_table()
+            
+            table_loading.visible = False
+            page.update()
+        except Exception as e:
+            print(f"Error loading warehouse data: {e}")
+            items = controller.get_stock_data_sync()
+            refresh_table()
+            table_loading.visible = False
+            page.update()
+
+    async def add_item_async(name, quantity, unit, price):
+        await controller.order_new_item(name, quantity, unit, price)
+        await load_data()
+
+    def add_item_clicked(e):
         auth_service.update_activity()
-        if not (self.name_field.value and self.name_field.value.strip() and
-                self.quantity_field.value and self.quantity_field.value.strip() and
-                self.unit_field.value and self.unit_field.value.strip() and
-                self.price_field.value and self.price_field.value.strip()):
-            snack = ft.SnackBar(
-                content=ft.Text("Wszystkie pola muszą być wypełnione"),
-                duration=2000,
-                action="OK"
-            )
-            self._page.overlay.append(snack)
+        if not (name_field.value and name_field.value.strip() and
+                quantity_field.value and quantity_field.value.strip() and
+                unit_field.value and unit_field.value.strip() and
+                price_field.value and price_field.value.strip()):
+            snack = ft.SnackBar(content=ft.Text("Wszystkie pola muszą być wypełnione"), duration=2000)
+            page.overlay.append(snack)
             snack.open = True
-            self._page.update()
+            page.update()
             return
 
         try:
-            self.controller.order_new_item(
-                self.name_field.value.strip(),
-                int(self.quantity_field.value),
-                self.unit_field.value.strip(),
-                float(self.price_field.value),
-            )
-            self.refresh_table()
-            self.name_field.value = ""
-            self.quantity_field.value = ""
-            self.unit_field.value = "szt."
-            self.price_field.value = ""
+            page.run_task(add_item_async, name_field.value.strip(), int(quantity_field.value), unit_field.value.strip(), float(price_field.value))
+            name_field.value = ""
+            quantity_field.value = ""
+            unit_field.value = "szt."
+            price_field.value = ""
 
-            snack = ft.SnackBar(
-                content=ft.Text("Nowy towar dodany do magazynu"),
-                duration=2000,
-                action="OK"
-            )
-            self._page.overlay.append(snack)
+            snack = ft.SnackBar(content=ft.Text("Zamówienie złożone"), duration=2000)
+            page.overlay.append(snack)
             snack.open = True
-            self._page.update()
+            page.update()
         except ValueError:
-            snack = ft.SnackBar(
-                content=ft.Text("Wypełnij poprawnie wszystkie pola"),
-                duration=2000,
-                action="OK"
-            )
-            self._page.overlay.append(snack)
+            snack = ft.SnackBar(content=ft.Text("Wypełnij poprawnie wszystkie pola"), duration=2000)
+            page.overlay.append(snack)
             snack.open = True
-            self._page.update()
+            page.update()
 
-    def _go_to_menu(self, e):
-        from desktop_alkozon.ui.pages.main_menu import MainMenuView
-        self._page.clean()
-        self._page.add(MainMenuView(self._page))
-        self._page.update()
+    def go_to_menu(e):
+        from desktop_alkozon.ui.pages.login_page import create_main_menu_view
+        page.clean()
+        page.add(create_main_menu_view(page))
+        page.update()
+
+    form = ft.Row(
+        controls=[
+            name_field,
+            quantity_field,
+            unit_field,
+            price_field,
+            ft.ElevatedButton("Zamów nowy towar", on_click=add_item_clicked),
+        ],
+        spacing=10,
+    )
+
+    content = ft.Column(
+        controls=[
+            ft.Text("Stan magazynu", size=24, weight=ft.FontWeight.BOLD),
+            ft.Row([table_loading, table]),
+            ft.Divider(),
+            ft.Text("Zamów nowy towar", size=18, weight=ft.FontWeight.BOLD),
+            form,
+            ft.ElevatedButton(
+                "Powrót do menu głównego",
+                width=400,
+                on_click=go_to_menu,
+            ),
+        ],
+        spacing=20,
+    )
+
+    page.run_task(load_data)
+
+    return ft.Container(
+        padding=20,
+        content=content,
+    )

@@ -1,6 +1,6 @@
 import flet as ft
 import asyncio
-from desktop_alkozon.ui.pages.login_page import LoginPage
+from desktop_alkozon.ui.pages.login_page import create_login_page_view
 from desktop_alkozon.core.logger import setup_logger
 from desktop_alkozon.core.auth import auth_service   
 
@@ -14,26 +14,20 @@ def main(page: ft.Page):
     page.window_min_width = 800
     page.window_min_height = 600
 
-    login_page = LoginPage(page)
-    page.add(login_page)
+    page.add(create_login_page_view(page))
 
     setup_logger()
 
     async def inactivity_checker():
         while True:
             await asyncio.sleep(30)  
-            if auth_service.check_inactivity(page):
-                snack = ft.SnackBar(
-                    content=ft.Text("Wylogowany z powodu braku aktywności."),
-                    duration=4000,
-                    action="OK"
-                )
-                page.overlay.append(snack)
-                snack.open = True
-                page.update()
-                page.clean()
-                page.add(LoginPage(page))
-                page.update()
+            if auth_service.is_authenticated():
+                should_logout = await auth_service.check_inactivity(page)
+                if should_logout:
+                    auth_service.logout()
+                    page.clean()
+                    page.add(create_login_page_view(page))
+                    page.update()
 
     page.run_task(inactivity_checker)
 

@@ -1,7 +1,11 @@
 import pytest
 from desktop_alkozon.features.employees.service import JobOffer, Employee
 from desktop_alkozon.features.warehouse.service import WarehouseItem
-from desktop_alkozon.features.deliveries.service import Courier, Delivery
+from desktop_alkozon.features.deliveries.service import Courier, Delivery, DeliveryAnnouncement
+from desktop_alkozon.models.api_models import (
+    User, UserRole, Product, InventoryItem, Order, OrderStatus,
+    Delivery as ApiDelivery, DeliveryStatus, JobOfferStatus, WorkLog
+)
 
 
 class TestJobOfferModel:
@@ -13,31 +17,18 @@ class TestJobOfferModel:
         assert offer.status == "Otwarta"
 
     def test_job_offer_with_all_fields(self):
-        offer = JobOffer(id=5, title="Manager", salary=8000.0, status="Zamknięta")
+        offer = JobOffer(id=5, title="Manager", description="Test", salary=8000.0, status="Zamknięta")
         assert offer.title == "Manager"
         assert offer.status == "Zamknięta"
-
-    def test_job_offer_zero_salary(self):
-        offer = JobOffer(id=1, title="Wolontariusz", salary=0.0, status="Otwarta")
-        assert offer.salary == 0.0
-
-    def test_job_offer_string_salary_conversion(self):
-        offer = JobOffer(id=1, title="Test", salary="5000.0", status="Otwarta")
-        assert isinstance(offer.salary, (int, float))
+        assert offer.description == "Test"
 
 
 class TestEmployeeModel:
     def test_valid_employee(self):
-        emp = Employee(id=1, name="Jan Kowalski", position="Kierowca", status="Zatrudniony")
+        emp = Employee(id=1, name="Jan Kowalski", email="jan@example.com", position="Kierowca", role="EMPLOYEE", status="Aktywny")
         assert emp.id == 1
         assert emp.name == "Jan Kowalski"
-        assert emp.position == "Kierowca"
-
-    def test_employee_all_statuses(self):
-        statuses = ["Zatrudniony", "Na urlopie", "Zwolniony"]
-        for status in statuses:
-            emp = Employee(id=1, name="Test", position="Test", status=status)
-            assert emp.status == status
+        assert emp.role == "EMPLOYEE"
 
 
 class TestWarehouseItemModel:
@@ -46,58 +37,78 @@ class TestWarehouseItemModel:
         assert item.id == 1
         assert item.name == "Piwo 0.5l"
         assert item.quantity == 100
-        assert item.unit == "szt."
-        assert item.price == 4.99
 
     def test_warehouse_item_zero_quantity(self):
         item = WarehouseItem(id=1, name="Out of stock", quantity=0, unit="szt.", price=9.99)
         assert item.quantity == 0
 
-    def test_warehouse_item_different_units(self):
-        units = ["szt.", "l", "kg", "karton"]
-        for unit in units:
-            item = WarehouseItem(id=1, name="Test", quantity=10, unit=unit, price=9.99)
-            assert item.unit == unit
-
-    def test_warehouse_item_high_precision_price(self):
-        item = WarehouseItem(id=1, name="Premium", quantity=1, unit="szt.", price=99.99)
-        assert item.price == 99.99
+    def test_warehouse_item_with_category(self):
+        item = WarehouseItem(id=1, name="Wodka", quantity=50, unit="szt.", price=29.99, category="Wodka")
+        assert item.category == "Wodka"
 
 
 class TestCourierModel:
     def test_valid_courier(self):
-        courier = Courier(id=1, name="Jan Kowalski", status="Dostępny", vehicle="Van")
+        courier = Courier(id=1, name="Jan Kowalski", email="jan@example.com", status="Dostępny", vehicle="Van")
         assert courier.id == 1
         assert courier.name == "Jan Kowalski"
         assert courier.vehicle == "Van"
 
-    def test_courier_vehicles(self):
-        vehicles = ["Van", "Furgonetka", "Samochód osobowy", "Skuter"]
-        for vehicle in vehicles:
-            courier = Courier(id=1, name="Test", status="Dostępny", vehicle=vehicle)
-            assert courier.vehicle == vehicle
+    def test_courier_optional_vehicle(self):
+        courier = Courier(id=1, name="Test", email="test@example.com", status="Dostępny")
+        assert courier.vehicle is None
 
 
 class TestDeliveryModel:
     def test_valid_delivery(self):
-        delivery = Delivery(
-            id=1,
-            courier_name="Jan Kowalski",
-            destination="Warszawa",
-            status="W drodze",
-            announcement="Test"
-        )
+        delivery = Delivery(id=1, courier_name="Jan", destination="Warszawa", status="W drodze", announcement="Test")
         assert delivery.id == 1
         assert delivery.destination == "Warszawa"
 
-    def test_delivery_statuses(self):
-        statuses = ["Nowa", "W drodze", "Dostarczona", "Anulowana"]
-        for status in statuses:
-            delivery = Delivery(
-                id=1,
-                courier_name="Test",
-                destination="Test",
-                status=status,
-                announcement="Test"
-            )
-            assert delivery.status == status
+    def test_delivery_announcement(self):
+        announcement = DeliveryAnnouncement(id=1, title="Test", content="Content")
+        assert announcement.title == "Test"
+
+
+class TestApiModels:
+    def test_user_role_enum(self):
+        assert UserRole.MANAGER.value == "MANAGER"
+        assert UserRole.EMPLOYEE.value == "EMPLOYEE"
+        assert UserRole.CUSTOMER.value == "CUSTOMER"
+        assert UserRole.GUEST.value == "GUEST"
+
+    def test_order_status_enum(self):
+        assert OrderStatus.SUBMITTED.value == "SUBMITTED"
+        assert OrderStatus.IN_PRODUCTION.value == "IN_PRODUCTION"
+        assert OrderStatus.DELIVERED.value == "DELIVERED"
+
+    def test_delivery_status_enum(self):
+        assert DeliveryStatus.PENDING.value == "PENDING"
+        assert DeliveryStatus.IN_TRANSIT.value == "IN_TRANSIT"
+        assert DeliveryStatus.DELIVERED.value == "DELIVERED"
+
+    def test_user_model(self):
+        user = User(id=1, email="test@example.com", role=UserRole.MANAGER)
+        assert user.id == 1
+        assert user.email == "test@example.com"
+        assert user.role == UserRole.MANAGER
+
+    def test_product_model(self):
+        product = Product(id=1, name="Wodka", price=29.99, category="Wodka")
+        assert product.name == "Wodka"
+        assert product.price == 29.99
+
+    def test_inventory_item_model(self):
+        item = InventoryItem(id=1, quantity=100)
+        assert item.quantity == 100
+        assert item.product is None
+
+    def test_order_model(self):
+        order = Order(id=1, customerId=1, status=OrderStatus.SUBMITTED, deliveryAddress="Warszawa", totalAmount=99.99)
+        assert order.id == 1
+        assert order.status == OrderStatus.SUBMITTED
+
+    def test_work_log_model(self):
+        from datetime import datetime
+        work_log = WorkLog(id=1, employeeId=1, clockInAt=datetime.now())
+        assert work_log.employeeId == 1

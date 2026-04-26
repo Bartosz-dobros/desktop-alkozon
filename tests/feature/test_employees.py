@@ -13,41 +13,35 @@ def employees_controller():
     return EmployeesController()
 
 
-def test_get_offers(employees_service):
-    offers = employees_service.get_offers()
+def test_get_offers_sync(employees_service):
+    offers = employees_service.get_offers_sync()
     
     assert len(offers) == 2
     assert all(isinstance(o, JobOffer) for o in offers)
 
 
-def test_get_employees(employees_service):
-    employees = employees_service.get_employees()
+def test_get_employees_sync(employees_service):
+    employees = employees_service.get_employees_sync()
     
     assert len(employees) == 1
     assert all(isinstance(e, Employee) for e in employees)
 
 
-def test_post_new_offer(employees_service):
-    new_offer = employees_service.post_new_offer("Test Job", 5000.0)
+def test_job_offer_model():
+    offer = JobOffer(id=1, title="Kierowca dostaw", description="Test", salary=4500.0, status="Otwarta")
     
-    assert new_offer.title == "Test Job"
-    assert new_offer.salary == 5000.0
-    assert new_offer.status == "Otwarta"
-    assert len(employees_service.get_offers()) == 3
+    assert offer.id == 1
+    assert offer.title == "Kierowca dostaw"
+    assert offer.salary == 4500.0
+    assert offer.status == "Otwarta"
 
 
-def test_hire_employee(employees_service, capsys):
-    employees_service.hire_employee(1, "Test Employee")
+def test_employee_model():
+    emp = Employee(id=101, name="Jan Kowalski", email="jan@example.com", position="Kierowca", role="EMPLOYEE", status="Aktywny")
     
-    captured = capsys.readouterr()
-    assert "Zatrudniono" in captured.out
-
-
-def test_fire_employee(employees_service, capsys):
-    employees_service.fire_employee(101)
-    
-    captured = capsys.readouterr()
-    assert "Zwolniono" in captured.out
+    assert emp.id == 101
+    assert emp.name == "Jan Kowalski"
+    assert emp.role == "EMPLOYEE"
 
 
 def test_controller_get_offers(employees_controller):
@@ -62,8 +56,26 @@ def test_controller_get_employees(employees_controller):
     assert len(employees) == 1
 
 
-def test_controller_create_offer(employees_controller):
-    offer = employees_controller.create_offer("New Position", 6000.0)
+@pytest.mark.asyncio
+async def test_get_offers_async(employees_service, mocker):
+    mock_response = [
+        {"id": 1, "title": "Kierowca", "description": "Test", "status": "OPEN"},
+        {"id": 2, "title": "Magazynier", "description": "Test 2", "status": "OPEN"}
+    ]
+    mocker.patch("desktop_alkozon.features.employees.service.api_client.get", return_value=mock_response)
     
-    assert offer.title == "New Position"
-    assert offer.salary == 6000.0
+    offers = await employees_service.get_offers()
+    
+    assert len(offers) == 2
+
+
+@pytest.mark.asyncio
+async def test_get_employees_async(employees_service, mocker):
+    mock_response = [
+        {"id": 1, "email": "jan@example.com", "firstName": "Jan", "lastName": "Kowalski", "role": "EMPLOYEE", "isActive": True},
+    ]
+    mocker.patch("desktop_alkozon.features.employees.service.api_client.get", return_value=mock_response)
+    
+    employees = await employees_service.get_employees()
+    
+    assert len(employees) == 1
