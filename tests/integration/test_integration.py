@@ -19,20 +19,28 @@ class TestAuthFlow:
 class TestApiServiceIntegration:
     @pytest.mark.asyncio
     async def test_api_client_initialization(self, mocker):
-        mocker.patch("desktop_alkozon.services.api_client.load_dotenv")
+        mocker.patch("desktop_alkozon.services.api_client.load_config", return_value={
+            "API_BASE_URL": "http://test:8080/api",
+            "API_TIMEOUT": 10
+        })
         
         from desktop_alkozon.services.api_client import ApiClient
         
+        ApiClient._instance = None
         client = ApiClient()
-        assert "localhost:8080" in client.base_url or client.base_url is not None
+        assert client.base_url is not None
 
     @pytest.mark.asyncio
     async def test_multiple_concurrent_requests(self, mocker):
-        mocker.patch("desktop_alkozon.services.api_client.load_dotenv")
+        mocker.patch("desktop_alkozon.services.api_client.load_config", return_value={
+            "API_BASE_URL": "http://test:8080/api",
+            "API_TIMEOUT": 10
+        })
         
         from desktop_alkozon.services.api_client import ApiClient
         from unittest.mock import AsyncMock, MagicMock
         
+        ApiClient._instance = None
         client = ApiClient()
         client.client = AsyncMock()
         
@@ -54,7 +62,7 @@ class TestFeatureIntegration:
         from desktop_alkozon.features.employees.controller import EmployeesController
         
         controller = EmployeesController()
-        employees = controller.get_employees()
+        employees = controller.get_employees_sync()
         
         assert isinstance(employees, list)
 
@@ -62,7 +70,7 @@ class TestFeatureIntegration:
         from desktop_alkozon.features.warehouse.controller import WarehouseController
         
         controller = WarehouseController()
-        stock = controller.get_stock_data()
+        stock = controller.get_stock_data_sync()
         
         assert isinstance(stock, list)
         assert len(stock) >= 0
@@ -71,7 +79,7 @@ class TestFeatureIntegration:
         from desktop_alkozon.features.deliveries.controller import DeliveriesController
         
         controller = DeliveriesController()
-        deliveries = controller.get_deliveries()
+        deliveries = controller.get_deliveries_sync()
         
         assert isinstance(deliveries, list)
 

@@ -6,7 +6,10 @@ from desktop_alkozon.services.api_client import ApiClient
 
 @pytest.fixture
 def api_client(mocker):
-    mocker.patch("desktop_alkozon.services.api_client.load_dotenv")
+    mocker.patch("desktop_alkozon.services.api_client.load_config", return_value={
+        "API_BASE_URL": "http://test:8080/api",
+        "API_TIMEOUT": 10
+    })
     ApiClient._instance = None
     client = ApiClient()
     return client
