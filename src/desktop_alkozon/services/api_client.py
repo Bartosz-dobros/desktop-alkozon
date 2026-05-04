@@ -21,6 +21,7 @@ class ApiClient:
         self.client = httpx.AsyncClient(timeout=self.timeout)
         self._access_token: str | None = None
         self._refresh_token: str | None = None
+        self._refresh_in_progress = False
 
     def set_tokens(self, access_token: str, refresh_token: str | None = None):
         self._access_token = access_token
@@ -37,35 +38,60 @@ class ApiClient:
             headers["Authorization"] = f"Bearer {self._access_token}"
         return headers
 
-    async def post(self, endpoint: str, data: dict | None = None) -> dict:
+    async def _refresh_access_token(self) -> bool:
+        if self._refresh_in_progress or not self._refresh_token:
+            return False
+        self._refresh_in_progress = True
+        try:
+            response = await self.client.post(
+                f"{self.base_url}/auth/refresh",
+                json={"refreshToken": self._refresh_token}
+            )
+            response.raise_for_status()
+            data = response.json()
+            self._access_token = data.get("accessToken")
+            new_refresh = data.get("refreshToken")
+            if new_refresh:
+                self._refresh_token = new_refresh
+            return True
+        except Exception:
+            self.clear_tokens()
+            return False
+        finally:
+            self._refresh_in_progress = False
+
+    async def _request(self, method: str, endpoint: str, **kwargs):
         url = f"{self.base_url}{endpoint}"
-        response = await self.client.post(url, json=data or {}, headers=self._get_headers())
-        response.raise_for_status()
-        return response.json()
+        headers = self._get_headers()
+        kwargs["headers"] = {**headers, **kwargs.get("headers", {})}
+
+        try:
+            response = await self.client.request(method, url, **kwargs)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401 and self._refresh_token:
+                if await self._refresh_access_token():
+                    kwargs["headers"]["Authorization"] = f"Bearer {self._access_token}"
+                    response = await self.client.request(method, url, **kwargs)
+                    response.raise_for_status()
+                    return response.json()
+            raise
+
+    async def post(self, endpoint: str, data: dict | None = None) -> dict:
+        return await self._request("POST", endpoint, json=data or {})
 
     async def get(self, endpoint: str, params: dict | None = None) -> dict | list:
-        url = f"{self.base_url}{endpoint}"
-        response = await self.client.get(url, params=params, headers=self._get_headers())
-        response.raise_for_status()
-        return response.json()
+        return await self._request("GET", endpoint, params=params)
 
     async def put(self, endpoint: str, data: dict) -> dict:
-        url = f"{self.base_url}{endpoint}"
-        response = await self.client.put(url, json=data, headers=self._get_headers())
-        response.raise_for_status()
-        return response.json()
+        return await self._request("PUT", endpoint, json=data)
 
     async def patch(self, endpoint: str, data: dict | None = None) -> dict:
-        url = f"{self.base_url}{endpoint}"
-        response = await self.client.patch(url, json=data or {}, headers=self._get_headers())
-        response.raise_for_status()
-        return response.json()
+        return await self._request("PATCH", endpoint, json=data or {})
 
     async def delete(self, endpoint: str) -> dict:
-        url = f"{self.base_url}{endpoint}"
-        response = await self.client.delete(url, headers=self._get_headers())
-        response.raise_for_status()
-        return response.json()
+        return await self._request("DELETE", endpoint)
 
     async def close(self):
         await self.client.aclose()

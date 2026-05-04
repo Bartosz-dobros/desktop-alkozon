@@ -1,4 +1,4 @@
-from desktop_alkozon.features.deliveries.service import DeliveriesService, Delivery
+from desktop_alkozon.features.deliveries.service import DeliveriesService
 
 
 class DeliveriesController:

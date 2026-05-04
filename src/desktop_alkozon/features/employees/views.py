@@ -34,21 +34,25 @@ def create_employees_view(page: ft.Page) -> ft.Container:
         nonlocal offers, employees
         offers_table.rows.clear()
         for o in offers:
-            salary_str = f"{o.salary:.2f} zł" if o.salary else "Do ustalenia"
+            salary_str = f"{o.salary:.2f} zł" if hasattr(o, 'salary') and o.salary else "Do ustalenia"
+            status_str = o.status.value if hasattr(o.status, 'value') else str(o.status)
             offers_table.rows.append(ft.DataRow(cells=[
                 ft.DataCell(ft.Text(str(o.id))),
                 ft.DataCell(ft.Text(o.title)),
                 ft.DataCell(ft.Text(salary_str)),
-                ft.DataCell(ft.Text(o.status)),
+                ft.DataCell(ft.Text(status_str)),
             ]))
 
         employees_table.rows.clear()
         for e in employees:
+            name = e.email.split('@')[0].replace('.', ' ').title() if e.email else "Unknown"
+            role_str = e.role.value if hasattr(e.role, 'value') else str(e.role)
+            status_str = "Aktywny" if e.active else "Nieaktywny"
             employees_table.rows.append(ft.DataRow(cells=[
                 ft.DataCell(ft.Text(str(e.id))),
-                ft.DataCell(ft.Text(e.name)),
-                ft.DataCell(ft.Text(e.position)),
-                ft.DataCell(ft.Text(e.status)),
+                ft.DataCell(ft.Text(name)),
+                ft.DataCell(ft.Text(role_str)),
+                ft.DataCell(ft.Text(status_str)),
             ]))
 
     async def load_data():

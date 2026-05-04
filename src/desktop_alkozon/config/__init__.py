@@ -9,6 +9,7 @@ def load_config() -> dict:
         "API_BASE_URL": os.getenv("API_BASE_URL"),
         "API_TIMEOUT": int(os.getenv("API_TIMEOUT", 10)),
         "DEBUG": os.getenv("DEBUG", "false").lower() == "true",
+        "DEMO_MODE": os.getenv("DEMO_MODE", "false").lower() == "true",
     }
 
 
@@ -22,3 +23,7 @@ def get_api_timeout() -> int:
 
 def is_debug_mode() -> bool:
     return os.getenv("DEBUG", "false").lower() == "true"
+
+
+def is_demo_mode_enabled() -> bool:
+    return os.getenv("DEMO_MODE", "false").lower() == "true"

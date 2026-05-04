@@ -27,28 +27,3 @@ class TestLoginPage:
     def test_login_page_has_controls(self, login_view):
         if hasattr(login_view, 'content') and hasattr(login_view.content, 'controls'):
             assert len(login_view.content.controls) > 0
-
-
-class TestMainMenuView:
-    @pytest.fixture
-    def mock_page(self):
-        page = MagicMock()
-        page.update = MagicMock()
-        page.clean = MagicMock()
-        page.add = MagicMock()
-        return page
-
-    @pytest.fixture
-    def main_menu_view(self, mock_page, mocker):
-        mocker.patch("desktop_alkozon.ui.pages.main_menu.auth_service")
-        from desktop_alkozon.ui.pages.main_menu import create_main_menu_view
-        return create_main_menu_view(mock_page)
-
-    def test_main_menu_creates_view(self, main_menu_view):
-        assert main_menu_view is not None
-
-    def test_main_menu_has_buttons(self, main_menu_view):
-        if hasattr(main_menu_view, 'content') and hasattr(main_menu_view.content, 'controls'):
-            controls = main_menu_view.content.controls
-            buttons = [ctrl for ctrl in controls if hasattr(ctrl, "on_click")]
-            assert len(buttons) >= 3

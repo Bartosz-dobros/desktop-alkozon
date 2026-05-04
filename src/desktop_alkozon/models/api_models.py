@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
@@ -33,23 +33,16 @@ class JobOfferStatus(str, Enum):
     CLOSED = "CLOSED"
 
 
-class WorkLogStatus(str, Enum):
-    PENDING = "PENDING"
-    IN_PROGRESS = "IN_PROGRESS"
-    COMPLETED = "COMPLETED"
-    REJECTED = "REJECTED"
-
-
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
 
-class LoginResponse(BaseModel):
+class TokenResponse(BaseModel):
     accessToken: str
-    refreshToken: Optional[str] = None
+    refreshToken: str
     tokenType: str = "Bearer"
-    expiresIn: int
+    expiresInSeconds: int
 
 
 class RefreshRequest(BaseModel):
@@ -67,6 +60,15 @@ class User(BaseModel):
     ageConfirmedAt: Optional[datetime] = None
     createdAt: Optional[datetime] = None
     updatedAt: Optional[datetime] = None
+
+
+class UserAdminResponse(BaseModel):
+    id: int
+    email: str
+    role: UserRole
+    active: bool
+    courier: bool
+    ageConfirmedAt: Optional[datetime] = None
 
 
 class Product(BaseModel):
@@ -91,14 +93,6 @@ class InventoryItem(BaseModel):
     warehouseZone: Optional[str] = None
     lastUpdatedAt: Optional[datetime] = None
     product: Optional[Product] = None
-
-
-class RawMaterial(BaseModel):
-    id: int
-    name: str
-    unit: str
-    quantity: int
-    lastUpdatedAt: Optional[datetime] = None
 
 
 class Order(BaseModel):
@@ -133,15 +127,6 @@ class Delivery(BaseModel):
     courier: Optional[User] = None
 
 
-class DeliveryAnnouncement(BaseModel):
-    id: int
-    title: str
-    content: str
-    publishedAt: Optional[datetime] = None
-    createdBy: Optional[int] = None
-    createdAt: Optional[datetime] = None
-
-
 class JobOffer(BaseModel):
     id: int
     title: str
@@ -161,11 +146,98 @@ class WorkLog(BaseModel):
     notes: Optional[str] = None
 
 
-class WorkLogSummary(BaseModel):
+class JobOfferResponse(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    status: JobOfferStatus
+    createdAt: datetime
+    updatedAt: datetime
+
+
+class JobOfferRequest(BaseModel):
+    title: str
+    description: str
+
+
+class InventoryProductRow(BaseModel):
+    productId: int
+    name: str
+    quantity: int
+    warehouseZone: Optional[str] = None
+
+
+class InventoryRawRow(BaseModel):
+    id: int
+    name: str
+    unit: str
+    quantity: float
+
+
+class InventoryOverviewResponse(BaseModel):
+    products: List[InventoryProductRow]
+    rawMaterials: List[InventoryRawRow]
+
+
+class DeliveryResponse(BaseModel):
+    id: int
+    orderId: int
+    courierId: Optional[int] = None
+    courierEmail: Optional[str] = None
+    status: DeliveryStatus
+    addressSnapshot: str
+    customerEmail: Optional[str] = None
+    startedAt: Optional[datetime] = None
+    deliveredAt: Optional[datetime] = None
+
+
+class PatchQuantityRequest(BaseModel):
+    delta: int
+
+
+class PatchDeliveryAssignRequest(BaseModel):
+    courierId: int
+
+
+class PatchDeliveryStatusRequest(BaseModel):
+    status: DeliveryStatus
+
+
+class DeliveryAnnouncement(BaseModel):
+    id: int
+    title: str
+    content: str
+    publishedAt: Optional[str] = None
+    createdBy: Optional[int] = None
+    createdAt: Optional[datetime] = None
+
+
+class DeliveryAnnouncementRequest(BaseModel):
+    title: str
+    content: str
+
+
+class DeliveryAnnouncementResponse(BaseModel):
+    id: int
+    title: str
+    content: str
+    createdBy: Optional[int] = None
+    createdAt: Optional[datetime] = None
+
+
+class WorkLogResponse(BaseModel):
+    id: int
     employeeId: int
+    clockInAt: datetime
+    clockOutAt: Optional[datetime] = None
+    breakStartedAt: Optional[datetime] = None
+    breakEndedAt: Optional[datetime] = None
+
+
+class WorkSummaryResponse(BaseModel):
     totalHours: float
     totalBreaks: float
-    entries: list[WorkLog]
+    entries: List[WorkLogResponse]
 
 
 class SalesReport(BaseModel):

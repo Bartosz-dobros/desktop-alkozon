@@ -1,9 +1,12 @@
 import time
 import keyring
+import jwt
+import httpx
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
 from desktop_alkozon.services.api_client import api_client
+from desktop_alkozon.models.api_models import TokenResponse, UserRole
 
 
 class LoginCredentials(BaseModel):
@@ -17,27 +20,13 @@ class AuthService:
     INACTIVITY_TIMEOUT = 1800
     SERVICE_NAME = "desktop_alkozon"
 
-    MOCK_USERS = {
-        "manager@example.com": {
-            "password": "Manager123!",
-            "user": {"email": "manager@example.com", "role": "MANAGER", "firstName": "Jan", "lastName": "Manager"}
-        },
-        "employee@example.com": {
-            "password": "Employee123!",
-            "user": {"email": "employee@example.com", "role": "EMPLOYEE", "firstName": "Anna", "lastName": "Pracownik"}
-        },
-        "demo@demo.com": {
-            "password": "demo1234",
-            "user": {"email": "demo@demo.com", "role": "MANAGER", "firstName": "Demo", "lastName": "User"}
-        }
-    }
-
     def __init__(self):
         self.attempts = 0
         self.locked = False
         self.last_activity = time.time()
         self._current_user = None
-        self._mock_mode = False
+        self._api_unavailable = False
+        self._demo_mode = False
 
     def _get_stored_token(self) -> str | None:
         return keyring.get_password(self.SERVICE_NAME, "access_token")
@@ -56,6 +45,13 @@ class AuthService:
             pass
         api_client.clear_tokens()
 
+    def _decode_jwt(self, token: str) -> dict:
+        try:
+            payload = jwt.decode(token, options={"verify_signature": False})
+            return payload
+        except Exception:
+            return {}
+
     async def login(self, email: str, password: str, two_fa_code: str | None = None) -> bool:
         if self.locked:
             return False
@@ -70,50 +66,55 @@ class AuthService:
                 "email": email,
                 "password": password
             }
-            if two_fa_code:
-                payload["twoFaCode"] = two_fa_code
 
             response = await api_client.post("/auth/login", payload)
+            token_response = TokenResponse(**response)
 
-            access_token = response.get("accessToken") or response.get("access_token", "")
-            refresh_token = response.get("refreshToken") or response.get("refresh_token")
-            
-            if not access_token:
-                raise ValueError("No access token in response")
+            self._store_tokens(token_response.accessToken, token_response.refreshToken)
 
-            self._store_tokens(access_token, refresh_token)
-
-            self._current_user = response.get("user") or {
-                "email": email,
-                "role": response.get("role", "EMPLOYEE")
+            claims = self._decode_jwt(token_response.accessToken)
+            self._current_user = {
+                "id": int(claims.get("sub", 0)),
+                "email": claims.get("email", email),
+                "role": claims.get("role", "EMPLOYEE"),
             }
 
             self.attempts = 0
             self.update_activity()
-            self._mock_mode = False
+            self._api_unavailable = False
             return True
 
-        except Exception:
-            return self._mock_login(email, password)
-
-    def _mock_login(self, email: str, password: str) -> bool:
-        email_lower = email.lower()
-        if email_lower in self.MOCK_USERS:
-            mock_user = self.MOCK_USERS[email_lower]
-            if mock_user["password"] == password:
-                self._mock_mode = True
-                self._current_user = mock_user["user"]
-                self._store_tokens("mock_token_" + str(int(time.time())), None)
+        except httpx.RequestError as e:
+            self._api_unavailable = True
+            print(f"Login failed - API unavailable: {e}")
+            # Fallback to demo mode if credentials match demo accounts
+            if email == "manager@example.com" and password == "Manager123!":
+                self.enable_demo_mode()
                 self.attempts = 0
-                self.update_activity()
-                print("Logged in with mock mode (API unavailable)")
                 return True
-        
-        print("Invalid credentials (mock mode)")
-        return False
+            return False
+        except Exception as e:
+            self._api_unavailable = False
+            print(f"Login failed: {e}")
+            return False
 
-    def is_mock_mode(self) -> bool:
-        return self._mock_mode
+    def is_demo_mode(self) -> bool:
+        return self._demo_mode
+
+    def enable_demo_mode(self):
+        self._demo_mode = True
+        self._current_user = {
+            "id": 999,
+            "email": "demo@demo.com",
+            "role": "MANAGER",
+            "firstName": "Demo",
+            "lastName": "User"
+        }
+        self._api_unavailable = False
+        print("Demo mode enabled - using mock data")
+
+    def is_api_unavailable(self) -> bool:
+        return self._api_unavailable
 
     def login_sync(self, email: str, password: str) -> bool:
         if self.locked:
@@ -163,13 +164,21 @@ class AuthService:
                 "refreshToken": refresh
             })
 
-            self._store_tokens(
-                response.get("accessToken", ""),
-                response.get("refreshToken")
-            )
+            token_response = TokenResponse(**response)
+            self._store_tokens(token_response.accessToken, token_response.refreshToken)
+
+            claims = self._decode_jwt(token_response.accessToken)
+            if claims:
+                self._current_user = {
+                    "id": int(claims.get("sub", 0)),
+                    "email": claims.get("email", ""),
+                    "role": claims.get("role", "EMPLOYEE"),
+                }
+
             return True
 
-        except Exception:
+        except Exception as e:
+            print(f"Token refresh failed: {e}")
             return False
 
     def unlock(self):

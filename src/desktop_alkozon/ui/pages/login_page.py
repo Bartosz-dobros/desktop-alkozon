@@ -1,5 +1,6 @@
 import flet as ft
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.config import is_demo_mode_enabled
 
 
 def create_login_page_view(page: ft.Page) -> ft.Container:
@@ -64,7 +65,10 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
             loading[0] = False
             login_button.disabled = False
             login_button.content = ft.Text("LOGIN")
-            if auth_service.is_locked():
+            if auth_service.is_api_unavailable():
+                status_text.value = "Cannot connect to server. Please check your connection."
+                status_text.visible = True
+            elif auth_service.is_locked():
                 status_text.value = "Account locked. Restart the app."
                 status_text.visible = True
                 login_button.disabled = True
@@ -77,29 +81,45 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
 
         page.update()
 
+    async def enter_demo_mode(page):
+        auth_service.enable_demo_mode()
+        page.clean()
+        page.add(create_main_menu_view(page))
+        page.update()
+
     login_button.on_click = login_clicked
+
+    controls = [
+        ft.Text("AlkozOn Desktop", size=32, weight=ft.FontWeight.BOLD),
+        ft.Text("Log in to access warehouse, deliveries & employees", size=16),
+        ft.Divider(),
+        username_field,
+        password_field,
+        two_fa_field,
+        status_text,
+        login_button,
+        ft.TextButton("Forgot password?", on_click=lambda e: print("TODO: reset")),
+    ]
+
+    if is_demo_mode_enabled():
+        controls.append(
+            ft.ElevatedButton(
+                "Enter Demo Mode (Offline)",
+                width=400,
+                on_click=lambda e: page.run_task(enter_demo_mode, page),
+                style=ft.ButtonStyle(bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE)
+            )
+        )
 
     return ft.Container(
         padding=40,
         alignment=ft.Alignment(0.5, 0.5),
         content=ft.Column(
-            controls=[
-                ft.Text("AlkozOn Desktop", size=32, weight=ft.FontWeight.BOLD),
-                ft.Text("Log in to access warehouse, deliveries & employees", size=16),
-                ft.Divider(),
-                username_field,
-                password_field,
-                two_fa_field,
-                status_text,
-                login_button,
-                ft.TextButton("Forgot password?", on_click=lambda e: print("TODO: reset")),
-            ],
+            controls=controls,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=20,
         ),
     )
-
-
 def create_main_menu_view(page: ft.Page) -> ft.Container:
     user = auth_service.get_current_user()
     user_name = (user.get("firstName", "") + " " + user.get("lastName", "")).strip() if user else "User"

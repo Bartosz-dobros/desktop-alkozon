@@ -52,14 +52,15 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
     def refresh_table():
         table.rows.clear()
         for item in items:
+            price_str = f"{item.price:.2f} zł" if hasattr(item, 'price') and item.price else "N/A"
             table.rows.append(
                 ft.DataRow(
                     cells=[
                         ft.DataCell(ft.Text(str(item.id))),
                         ft.DataCell(ft.Text(item.name)),
                         ft.DataCell(ft.Text(str(item.quantity))),
-                        ft.DataCell(ft.Text(item.unit)),
-                        ft.DataCell(ft.Text(f"{item.price:.2f} zł")),
+                        ft.DataCell(ft.Text(item.unit if hasattr(item, 'unit') else "szt.")),
+                        ft.DataCell(ft.Text(price_str)),
                     ]
                 )
             )

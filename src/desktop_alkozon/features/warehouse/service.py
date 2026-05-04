@@ -1,72 +1,62 @@
-from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 from desktop_alkozon.services.api_client import api_client
-
-
-class WarehouseItem(BaseModel):
-    id: int
-    name: str
-    quantity: int
-    unit: str
-    price: float
-    category: Optional[str] = None
-    productId: Optional[int] = None
+from desktop_alkozon.models.api_models import InventoryOverviewResponse, InventoryProductRow, InventoryRawRow
+from desktop_alkozon.core.auth import auth_service
 
 
 class WarehouseService:
 
-    async def get_all_items(self) -> list[WarehouseItem]:
+    async def get_all_items(self) -> Optional[InventoryOverviewResponse]:
         try:
             response = await api_client.get("/inventory")
-            if isinstance(response, list):
-                return [WarehouseItem(
-                    id=item.get("id", 0),
-                    name=item.get("product", {}).get("name", f"Produkt {item.get('id')}") if item.get("product") else f"Produkt {item.get('id')}",
-                    quantity=item.get("quantity", 0),
-                    unit=item.get("product", {}).get("unit", "szt.") if item.get("product") else "szt.",
-                    price=item.get("product", {}).get("price", 0.0) if item.get("product") else 0.0,
-                    category=item.get("product", {}).get("category") if item.get("product") else None,
-                    productId=item.get("productId")
-                ) for item in response]
-            return []
+            return InventoryOverviewResponse(**response)
         except Exception:
-            return self.get_all_items_sync()
+            if auth_service.is_demo_mode():
+                return InventoryOverviewResponse(
+                    products=[
+                        InventoryProductRow(productId=1, name="Demo Vodka 500ml", quantity=100, warehouseZone="A1"),
+                        InventoryProductRow(productId=2, name="Demo Whisky 700ml", quantity=50, warehouseZone="B2")
+                    ],
+                    rawMaterials=[
+                        InventoryRawRow(id=1, name="Barley", unit="kg", quantity=500.0)
+                    ]
+                )
+            return None
 
-    async def add_new_item(self, name: str, quantity: int, unit: str, price: float) -> WarehouseItem:
-        response = await api_client.post("/warehouse/replenishment", {
-            "items": [{"name": name, "quantity": quantity, "unit": unit, "price": price}]
-        })
-        return WarehouseItem(
-            id=0,
-            name=name,
-            quantity=quantity,
-            unit=unit,
-            price=price
-        )
+    async def add_new_item(self, name: str, quantity: int, unit: str, price: float):
+        print("Warehouse replenishment endpoint not yet implemented in API")
+        return None
 
-    async def update_item_quantity(self, item_id: int, delta: int) -> bool:
+    async def update_item_quantity(self, item_id: int, delta: int) -> Optional[InventoryProductRow]:
         try:
-            await api_client.patch(f"/inventory/products/{item_id}", {"delta": delta})
-            return True
+            response = await api_client.patch(f"/inventory/products/{item_id}", {"delta": delta})
+            return InventoryProductRow(**response)
         except Exception:
-            return False
+            return None
 
-    async def get_replenishment_history(self) -> list[dict]:
+    async def update_raw_material(self, material_id: int, delta: int) -> Optional[InventoryRawRow]:
         try:
-            response = await api_client.get("/warehouse/replenishment")
-            if isinstance(response, list):
-                return response
-            return []
+            response = await api_client.patch(f"/inventory/raw-materials/{material_id}", {"delta": delta})
+            return InventoryRawRow(**response)
         except Exception:
-            return []
+            return None
 
-    def get_all_items_sync(self) -> list[WarehouseItem]:
-        return [
-            WarehouseItem(id=1, name="Piwo Jasne 0.5l", quantity=1240, unit="szt.", price=4.99, category="Piwo"),
-            WarehouseItem(id=2, name="Wodka 0.7l", quantity=450, unit="szt.", price=29.99, category="Wodka"),
-            WarehouseItem(id=3, name="Whisky 0.75l", quantity=120, unit="szt.", price=89.99, category="Whisky"),
-            WarehouseItem(id=4, name="Coca-Cola 1l", quantity=890, unit="szt.", price=5.49, category="Dodatki"),
-        ]
+    async def get_replenishment_history(self) -> List[dict]:
+        print("Warehouse replenishment endpoint not yet implemented in API")
+        return []
 
-    def add_new_item_sync(self, name: str, quantity: int, unit: str, price: float) -> WarehouseItem:
-        return WarehouseItem(id=999, name=name, quantity=quantity, unit=unit, price=price)
+    def get_all_items_sync(self):
+        if auth_service.is_demo_mode():
+            return InventoryOverviewResponse(
+                products=[
+                    InventoryProductRow(productId=1, name="Demo Vodka 500ml", quantity=100, warehouseZone="A1"),
+                    InventoryProductRow(productId=2, name="Demo Whisky 700ml", quantity=50, warehouseZone="B2")
+                ],
+                rawMaterials=[
+                    InventoryRawRow(id=1, name="Barley", unit="kg", quantity=500.0)
+                ]
+            )
+        return None
+
+    def add_new_item_sync(self, name: str, quantity: int, unit: str, price: float):
+        return None

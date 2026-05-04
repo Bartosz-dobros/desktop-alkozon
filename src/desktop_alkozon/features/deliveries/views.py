@@ -55,24 +55,29 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
         nonlocal couriers, deliveries
         couriers_table.rows.clear()
         for c in couriers:
+            name = c.get('email', '').split('@')[0].replace('.', ' ').title() if c.get('email') else "Unknown"
+            status = "Dostępny" if c.get('active', False) else "Nieaktywny"
             couriers_table.rows.append(
                 ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(str(c.id))),
-                    ft.DataCell(ft.Text(c.name)),
-                    ft.DataCell(ft.Text(c.email)),
-                    ft.DataCell(ft.Text(c.status)),
+                    ft.DataCell(ft.Text(str(c.get('id', 0)))),
+                    ft.DataCell(ft.Text(name)),
+                    ft.DataCell(ft.Text(c.get('email', ''))),
+                    ft.DataCell(ft.Text(status)),
                 ])
             )
 
         deliveries_table.rows.clear()
         for d in deliveries:
+            courier_name = d.get('courierEmail', 'Nieprzypisany') or 'Nieprzypisany'
+            destination = d.get('addressSnapshot', 'Brak')
+            status = d.get('status', 'PENDING')
             deliveries_table.rows.append(
                 ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(str(d.id))),
-                    ft.DataCell(ft.Text(d.courier_name)),
-                    ft.DataCell(ft.Text(d.destination)),
-                    ft.DataCell(ft.Text(d.status)),
-                    ft.DataCell(ft.Text(d.announcement)),
+                    ft.DataCell(ft.Text(str(d.get('id', 0)))),
+                    ft.DataCell(ft.Text(courier_name)),
+                    ft.DataCell(ft.Text(destination)),
+                    ft.DataCell(ft.Text(status)),
+                    ft.DataCell(ft.Text('')),
                 ])
             )
 

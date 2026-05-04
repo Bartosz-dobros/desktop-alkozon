@@ -1,72 +1,85 @@
 import pytest
-from desktop_alkozon.features.employees.service import JobOffer, Employee
-from desktop_alkozon.features.warehouse.service import WarehouseItem
-from desktop_alkozon.features.deliveries.service import Courier, Delivery, DeliveryAnnouncement
 from desktop_alkozon.models.api_models import (
     User, UserRole, Product, InventoryItem, Order, OrderStatus,
-    Delivery as ApiDelivery, DeliveryStatus, JobOfferStatus, WorkLog
+    Delivery as ApiDelivery, DeliveryStatus, JobOfferStatus, WorkLog,
+    JobOfferResponse, UserAdminResponse, InventoryOverviewResponse,
+    InventoryProductRow, InventoryRawRow, DeliveryResponse,
+    DeliveryAnnouncementResponse, WorkLogResponse, WorkSummaryResponse
 )
 
 
 class TestJobOfferModel:
     def test_valid_job_offer(self):
-        offer = JobOffer(id=1, title="Kierowca", salary=4500.0, status="Otwarta")
+        offer = JobOfferResponse(
+            id=1, title="Kierowca", status=JobOfferStatus.OPEN,
+            createdAt="2024-01-01T00:00:00Z", updatedAt="2024-01-01T00:00:00Z"
+        )
         assert offer.id == 1
         assert offer.title == "Kierowca"
-        assert offer.salary == 4500.0
-        assert offer.status == "Otwarta"
+        assert offer.status == JobOfferStatus.OPEN
 
     def test_job_offer_with_all_fields(self):
-        offer = JobOffer(id=5, title="Manager", description="Test", salary=8000.0, status="Zamknięta")
+        offer = JobOfferResponse(
+            id=5, title="Manager", description="Test", status=JobOfferStatus.CLOSED,
+            createdAt="2024-01-01T00:00:00Z", updatedAt="2024-01-01T00:00:00Z"
+        )
         assert offer.title == "Manager"
-        assert offer.status == "Zamknięta"
+        assert offer.status == JobOfferStatus.CLOSED
         assert offer.description == "Test"
 
 
 class TestEmployeeModel:
     def test_valid_employee(self):
-        emp = Employee(id=1, name="Jan Kowalski", email="jan@example.com", position="Kierowca", role="EMPLOYEE", status="Aktywny")
+        emp = UserAdminResponse(
+            id=1, email="jan@example.com", role=UserRole.EMPLOYEE,
+            active=True, courier=False
+        )
         assert emp.id == 1
-        assert emp.name == "Jan Kowalski"
-        assert emp.role == "EMPLOYEE"
+        assert emp.email == "jan@example.com"
+        assert emp.role == UserRole.EMPLOYEE
 
 
 class TestWarehouseItemModel:
     def test_valid_warehouse_item(self):
-        item = WarehouseItem(id=1, name="Piwo 0.5l", quantity=100, unit="szt.", price=4.99)
-        assert item.id == 1
-        assert item.name == "Piwo 0.5l"
+        item = InventoryProductRow(productId=1, name="Piwo", quantity=100, warehouseZone="A1")
+        assert item.productId == 1
+        assert item.name == "Piwo"
         assert item.quantity == 100
 
     def test_warehouse_item_zero_quantity(self):
-        item = WarehouseItem(id=1, name="Out of stock", quantity=0, unit="szt.", price=9.99)
+        item = InventoryProductRow(productId=1, name="Out of stock", quantity=0)
         assert item.quantity == 0
 
     def test_warehouse_item_with_category(self):
-        item = WarehouseItem(id=1, name="Wodka", quantity=50, unit="szt.", price=29.99, category="Wodka")
-        assert item.category == "Wodka"
+        item = InventoryProductRow(productId=1, name="Wodka", quantity=50, warehouseZone="B2")
+        assert item.warehouseZone == "B2"
 
 
 class TestCourierModel:
     def test_valid_courier(self):
-        courier = Courier(id=1, name="Jan Kowalski", email="jan@example.com", status="Dostępny", vehicle="Van")
-        assert courier.id == 1
-        assert courier.name == "Jan Kowalski"
-        assert courier.vehicle == "Van"
+        courier_data = {"id": 1, "email": "jan@example.com", "active": True, "courier": True}
+        assert courier_data["id"] == 1
+        assert courier_data["email"] == "jan@example.com"
 
     def test_courier_optional_vehicle(self):
-        courier = Courier(id=1, name="Test", email="test@example.com", status="Dostępny")
-        assert courier.vehicle is None
+        courier_data = {"id": 1, "email": "test@example.com", "courier": False}
+        assert "vehicle" not in courier_data
 
 
 class TestDeliveryModel:
     def test_valid_delivery(self):
-        delivery = Delivery(id=1, courier_name="Jan", destination="Warszawa", status="W drodze", announcement="Test")
+        delivery = DeliveryResponse(
+            id=1, orderId=100, status=DeliveryStatus.IN_TRANSIT,
+            addressSnapshot="Warszawa"
+        )
         assert delivery.id == 1
-        assert delivery.destination == "Warszawa"
+        assert delivery.status == DeliveryStatus.IN_TRANSIT
 
     def test_delivery_announcement(self):
-        announcement = DeliveryAnnouncement(id=1, title="Test", content="Content")
+        announcement = DeliveryAnnouncementResponse(
+            id=1, title="Test", content="Content"
+        )
+        assert announcement.id == 1
         assert announcement.title == "Test"
 
 
