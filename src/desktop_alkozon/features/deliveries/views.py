@@ -1,6 +1,7 @@
 import flet as ft
-from desktop_alkozon.features.deliveries.controller import DeliveriesController
+
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.features.deliveries.controller import DeliveriesController
 
 
 def create_deliveries_view(page: ft.Page) -> ft.Container:
@@ -55,30 +56,38 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
         nonlocal couriers, deliveries
         couriers_table.rows.clear()
         for c in couriers:
-            name = c.get('email', '').split('@')[0].replace('.', ' ').title() if c.get('email') else "Unknown"
-            status = "Dostępny" if c.get('active', False) else "Nieaktywny"
+            name = (
+                c.get("email", "").split("@")[0].replace(".", " ").title()
+                if c.get("email")
+                else "Unknown"
+            )
+            status = "Dostępny" if c.get("active", False) else "Nieaktywny"
             couriers_table.rows.append(
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(str(c.get('id', 0)))),
-                    ft.DataCell(ft.Text(name)),
-                    ft.DataCell(ft.Text(c.get('email', ''))),
-                    ft.DataCell(ft.Text(status)),
-                ])
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(str(c.get("id", 0)))),
+                        ft.DataCell(ft.Text(name)),
+                        ft.DataCell(ft.Text(c.get("email", ""))),
+                        ft.DataCell(ft.Text(status)),
+                    ]
+                )
             )
 
         deliveries_table.rows.clear()
         for d in deliveries:
-            courier_name = d.get('courierEmail', 'Nieprzypisany') or 'Nieprzypisany'
-            destination = d.get('addressSnapshot', 'Brak')
-            status = d.get('status', 'PENDING')
+            courier_name = d.get("courierEmail", "Nieprzypisany") or "Nieprzypisany"
+            destination = d.get("addressSnapshot", "Brak")
+            status = d.get("status", "PENDING")
             deliveries_table.rows.append(
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(str(d.get('id', 0)))),
-                    ft.DataCell(ft.Text(courier_name)),
-                    ft.DataCell(ft.Text(destination)),
-                    ft.DataCell(ft.Text(status)),
-                    ft.DataCell(ft.Text('')),
-                ])
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(str(d.get("id", 0)))),
+                        ft.DataCell(ft.Text(courier_name)),
+                        ft.DataCell(ft.Text(destination)),
+                        ft.DataCell(ft.Text(status)),
+                        ft.DataCell(ft.Text("")),
+                    ]
+                )
             )
 
     async def load_data():
@@ -110,26 +119,37 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
 
     def create_announcement_clicked(e):
         auth_service.update_activity()
-        if not (courier_dropdown.value and destination_field.value.strip() and announcement_field.value.strip()):
-            snack = ft.SnackBar(content=ft.Text("Wypełnij wszystkie pola"), duration=2000)
+        if not (
+            courier_dropdown.value
+            and destination_field.value.strip()
+            and announcement_field.value.strip()
+        ):
+            snack = ft.SnackBar(
+                content=ft.Text("Wypełnij wszystkie pola"), duration=2000
+            )
             page.overlay.append(snack)
             snack.open = True
             page.update()
             return
 
         title = f"Dostawa dla {courier_dropdown.value} - {destination_field.value}"
-        
-        page.run_task(create_announcement_async, title, announcement_field.value.strip())
+
+        page.run_task(
+            create_announcement_async, title, announcement_field.value.strip()
+        )
 
         destination_field.value = ""
         announcement_field.value = ""
-        snack = ft.SnackBar(content=ft.Text("Ogłoszenie dostawy utworzone"), duration=2000)
+        snack = ft.SnackBar(
+            content=ft.Text("Ogłoszenie dostawy utworzone"), duration=2000
+        )
         page.overlay.append(snack)
         snack.open = True
         page.update()
 
     def go_to_menu(e):
         from desktop_alkozon.ui.pages.login_page import create_main_menu_view
+
         page.clean()
         page.add(create_main_menu_view(page))
         page.update()
@@ -140,7 +160,9 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
             courier_dropdown,
             destination_field,
             announcement_field,
-            ft.ElevatedButton("Utwórz ogłoszenie dostawy", on_click=create_announcement_clicked),
+            ft.ElevatedButton(
+                "Utwórz ogłoszenie dostawy", on_click=create_announcement_clicked
+            ),
         ],
         spacing=10,
     )

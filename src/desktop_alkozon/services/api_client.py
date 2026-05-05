@@ -1,4 +1,5 @@
 import httpx
+
 from desktop_alkozon.config import load_config
 
 
@@ -45,7 +46,7 @@ class ApiClient:
         try:
             response = await self.client.post(
                 f"{self.base_url}/auth/refresh",
-                json={"refreshToken": self._refresh_token}
+                json={"refreshToken": self._refresh_token},
             )
             response.raise_for_status()
             data = response.json()
@@ -70,12 +71,15 @@ class ApiClient:
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 401 and self._refresh_token:
-                if await self._refresh_access_token():
-                    kwargs["headers"]["Authorization"] = f"Bearer {self._access_token}"
-                    response = await self.client.request(method, url, **kwargs)
-                    response.raise_for_status()
-                    return response.json()
+            if (
+                e.response.status_code == 401
+                and self._refresh_token
+                and await self._refresh_access_token()
+            ):
+                kwargs["headers"]["Authorization"] = f"Bearer {self._access_token}"
+                response = await self.client.request(method, url, **kwargs)
+                response.raise_for_status()
+                return response.json()
             raise
 
     async def post(self, endpoint: str, data: dict | None = None) -> dict:

@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 class TestLoginPage:
@@ -12,18 +13,21 @@ class TestLoginPage:
 
     @pytest.fixture
     def login_view(self, mock_page, mocker):
-        mocker.patch("desktop_alkozon.core.auth.keyring.get_password", return_value=None)
+        mocker.patch(
+            "desktop_alkozon.core.auth.keyring.get_password", return_value=None
+        )
         mocker.patch("desktop_alkozon.core.auth.keyring.set_password")
         mocker.patch("desktop_alkozon.core.auth.keyring.delete_password")
         mocker.patch("desktop_alkozon.core.logger.setup_logger")
         mocker.patch("desktop_alkozon.ui.pages.login_page.auth_service")
         from desktop_alkozon.ui.pages.login_page import create_login_page_view
+
         return create_login_page_view(mock_page)
 
     def test_login_page_creates_view(self, login_view):
         assert login_view is not None
-        assert isinstance(login_view, MagicMock) or hasattr(login_view, 'content')
+        assert isinstance(login_view, MagicMock) or hasattr(login_view, "content")
 
     def test_login_page_has_controls(self, login_view):
-        if hasattr(login_view, 'content') and hasattr(login_view.content, 'controls'):
+        if hasattr(login_view, "content") and hasattr(login_view.content, "controls"):
             assert len(login_view.content.controls) > 0

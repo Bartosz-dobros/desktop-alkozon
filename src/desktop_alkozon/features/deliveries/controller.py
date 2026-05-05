@@ -2,7 +2,6 @@ from desktop_alkozon.features.deliveries.service import DeliveriesService
 
 
 class DeliveriesController:
-
     def __init__(self):
         self.service = DeliveriesService()
 

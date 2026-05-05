@@ -1,15 +1,17 @@
-import pytest
-import httpx
 from unittest.mock import AsyncMock, MagicMock
+
+import httpx
+import pytest
+
 from desktop_alkozon.services.api_client import ApiClient
 
 
 @pytest.fixture
 def api_client(mocker):
-    mocker.patch("desktop_alkozon.services.api_client.load_config", return_value={
-        "API_BASE_URL": "http://test:8080/api",
-        "API_TIMEOUT": 10
-    })
+    mocker.patch(
+        "desktop_alkozon.services.api_client.load_config",
+        return_value={"API_BASE_URL": "http://test:8080/api", "API_TIMEOUT": 10},
+    )
     ApiClient._instance = None
     client = ApiClient()
     return client
@@ -23,6 +25,7 @@ def mock_response():
         mock.status_code = status_code
         mock.raise_for_status = MagicMock()
         return mock
+
     return _make_response
 
 
@@ -118,7 +121,9 @@ class TestApiClientRequests:
 
     async def test_post_timeout_error(self, api_client):
         api_client.client = AsyncMock()
-        api_client.client.request.side_effect = httpx.TimeoutException("Request timed out")
+        api_client.client.request.side_effect = httpx.TimeoutException(
+            "Request timed out"
+        )
 
         with pytest.raises(httpx.TimeoutException):
             await api_client.post("/test", {"key": "value"})

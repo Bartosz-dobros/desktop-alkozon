@@ -2,7 +2,6 @@ from desktop_alkozon.features.warehouse.service import WarehouseService
 
 
 class WarehouseController:
-
     def __init__(self):
         self.service = WarehouseService()
 

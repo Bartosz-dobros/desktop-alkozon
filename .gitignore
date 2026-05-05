@@ -29,5 +29,5 @@ cache/
 .DS_Store
 Thumbs.db
 
-# Local config (never commit real API keys or secrets)
+# Local config
 .env.local

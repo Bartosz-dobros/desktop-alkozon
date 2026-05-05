@@ -1,18 +1,18 @@
 import time
-import keyring
-import jwt
-import httpx
-from pydantic import BaseModel, EmailStr
-from typing import Optional
 
+import httpx
+import jwt
+import keyring
+from pydantic import BaseModel, EmailStr
+
+from desktop_alkozon.models.api_models import TokenResponse
 from desktop_alkozon.services.api_client import api_client
-from desktop_alkozon.models.api_models import TokenResponse, UserRole
 
 
 class LoginCredentials(BaseModel):
     email: EmailStr
     password: str
-    two_fa_code: Optional[str] = None
+    two_fa_code: str | None = None
 
 
 class AuthService:
@@ -52,7 +52,9 @@ class AuthService:
         except Exception:
             return {}
 
-    async def login(self, email: str, password: str, two_fa_code: str | None = None) -> bool:
+    async def login(
+        self, email: str, password: str, two_fa_code: str | None = None
+    ) -> bool:
         if self.locked:
             return False
 
@@ -62,10 +64,7 @@ class AuthService:
             return False
 
         try:
-            payload = {
-                "email": email,
-                "password": password
-            }
+            payload = {"email": email, "password": password}
 
             response = await api_client.post("/auth/login", payload)
             token_response = TokenResponse(**response)
@@ -87,7 +86,6 @@ class AuthService:
         except httpx.RequestError as e:
             self._api_unavailable = True
             print(f"Login failed - API unavailable: {e}")
-            # Fallback to demo mode if credentials match demo accounts
             if email == "manager@example.com" and password == "Manager123!":
                 self.enable_demo_mode()
                 self.attempts = 0
@@ -108,7 +106,7 @@ class AuthService:
             "email": "demo@demo.com",
             "role": "MANAGER",
             "firstName": "Demo",
-            "lastName": "User"
+            "lastName": "User",
         }
         self._api_unavailable = False
         print("Demo mode enabled - using mock data")
@@ -160,9 +158,7 @@ class AuthService:
             if not refresh:
                 return False
 
-            response = await api_client.post("/auth/refresh", {
-                "refreshToken": refresh
-            })
+            response = await api_client.post("/auth/refresh", {"refreshToken": refresh})
 
             token_response = TokenResponse(**response)
             self._store_tokens(token_response.accessToken, token_response.refreshToken)

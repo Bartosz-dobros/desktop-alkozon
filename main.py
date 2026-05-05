@@ -1,8 +1,11 @@
-import flet as ft
 import asyncio
-from desktop_alkozon.ui.pages.login_page import create_login_page_view
+
+import flet as ft
+
+from desktop_alkozon.core.auth import auth_service
 from desktop_alkozon.core.logger import setup_logger
-from desktop_alkozon.core.auth import auth_service   
+from desktop_alkozon.ui.pages.login_page import create_login_page_view
+
 
 def main(page: ft.Page):
     page.title = "AlkozOn Desktop"
@@ -20,7 +23,7 @@ def main(page: ft.Page):
 
     async def inactivity_checker():
         while True:
-            await asyncio.sleep(30)  
+            await asyncio.sleep(30)
             if auth_service.is_authenticated():
                 should_logout = await auth_service.check_inactivity(page)
                 if should_logout:
@@ -30,6 +33,7 @@ def main(page: ft.Page):
                     page.update()
 
     page.run_task(inactivity_checker)
+
 
 if __name__ == "__main__":
     ft.run(main)

@@ -1,11 +1,12 @@
 import flet as ft
-from desktop_alkozon.core.auth import auth_service
+
 from desktop_alkozon.config import is_demo_mode_enabled
+from desktop_alkozon.core.auth import auth_service
 
 
 def create_login_page_view(page: ft.Page) -> ft.Container:
     loading = [False]
-    
+
     username_field = ft.TextField(
         label="Username / Email",
         width=400,
@@ -54,7 +55,7 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         success = await auth_service.login(
             username_field.value or "",
             password_field.value or "",
-            two_fa_field.value if two_fa_field.visible else None
+            two_fa_field.value if two_fa_field.visible else None,
         )
 
         if success:
@@ -66,7 +67,9 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
             login_button.disabled = False
             login_button.content = ft.Text("LOGIN")
             if auth_service.is_api_unavailable():
-                status_text.value = "Cannot connect to server. Please check your connection."
+                status_text.value = (
+                    "Cannot connect to server. Please check your connection."
+                )
                 status_text.visible = True
             elif auth_service.is_locked():
                 status_text.value = "Account locked. Restart the app."
@@ -107,7 +110,7 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
                 "Enter Demo Mode (Offline)",
                 width=400,
                 on_click=lambda e: page.run_task(enter_demo_mode, page),
-                style=ft.ButtonStyle(bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE)
+                style=ft.ButtonStyle(bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE),
             )
         )
 
@@ -120,25 +123,34 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
             spacing=20,
         ),
     )
+
+
 def create_main_menu_view(page: ft.Page) -> ft.Container:
     user = auth_service.get_current_user()
-    user_name = (user.get("firstName", "") + " " + user.get("lastName", "")).strip() if user else "User"
+    user_name = (
+        (user.get("firstName", "") + " " + user.get("lastName", "")).strip()
+        if user
+        else "User"
+    )
     user_email = user.get("email", "") if user else ""
 
     def go_to_warehouse(e):
         from desktop_alkozon.features.warehouse.views import create_warehouse_view
+
         page.clean()
         page.add(create_warehouse_view(page))
         page.update()
 
     def go_to_deliveries(e):
         from desktop_alkozon.features.deliveries.views import create_deliveries_view
+
         page.clean()
         page.add(create_deliveries_view(page))
         page.update()
 
     def go_to_employees(e):
         from desktop_alkozon.features.employees.views import create_employees_view
+
         page.clean()
         page.add(create_employees_view(page))
         page.update()
@@ -158,9 +170,24 @@ def create_main_menu_view(page: ft.Page) -> ft.Container:
                 ft.Text(f"Zalogowany jako: {user_name}", size=16),
                 ft.Text(user_email, size=12, color=ft.Colors.GREY_400),
                 ft.Divider(),
-                ft.ElevatedButton("Stan magazynu i zamówienia", width=500, height=60, on_click=go_to_warehouse),
-                ft.ElevatedButton("Kurierzy i dostawy", width=500, height=60, on_click=go_to_deliveries),
-                ft.ElevatedButton("Pracownicy i oferty pracy", width=500, height=60, on_click=go_to_employees),
+                ft.ElevatedButton(
+                    "Stan magazynu i zamówienia",
+                    width=500,
+                    height=60,
+                    on_click=go_to_warehouse,
+                ),
+                ft.ElevatedButton(
+                    "Kurierzy i dostawy",
+                    width=500,
+                    height=60,
+                    on_click=go_to_deliveries,
+                ),
+                ft.ElevatedButton(
+                    "Pracownicy i oferty pracy",
+                    width=500,
+                    height=60,
+                    on_click=go_to_employees,
+                ),
                 ft.Divider(),
                 ft.ElevatedButton(
                     "Wyloguj się",

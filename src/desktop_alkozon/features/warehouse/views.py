@@ -1,6 +1,7 @@
 import flet as ft
-from desktop_alkozon.features.warehouse.controller import WarehouseController
+
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.features.warehouse.controller import WarehouseController
 
 
 def create_warehouse_view(page: ft.Page) -> ft.Container:
@@ -52,14 +53,20 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
     def refresh_table():
         table.rows.clear()
         for item in items:
-            price_str = f"{item.price:.2f} zł" if hasattr(item, 'price') and item.price else "N/A"
+            price_str = (
+                f"{item.price:.2f} zł"
+                if hasattr(item, "price") and item.price
+                else "N/A"
+            )
             table.rows.append(
                 ft.DataRow(
                     cells=[
                         ft.DataCell(ft.Text(str(item.id))),
                         ft.DataCell(ft.Text(item.name)),
                         ft.DataCell(ft.Text(str(item.quantity))),
-                        ft.DataCell(ft.Text(item.unit if hasattr(item, 'unit') else "szt.")),
+                        ft.DataCell(
+                            ft.Text(item.unit if hasattr(item, "unit") else "szt.")
+                        ),
                         ft.DataCell(ft.Text(price_str)),
                     ]
                 )
@@ -70,10 +77,10 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
         try:
             table_loading.visible = True
             page.update()
-            
+
             items = await controller.get_stock_data()
             refresh_table()
-            
+
             table_loading.visible = False
             page.update()
         except Exception as e:
@@ -89,18 +96,32 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
 
     def add_item_clicked(e):
         auth_service.update_activity()
-        if not (name_field.value and name_field.value.strip() and
-                quantity_field.value and quantity_field.value.strip() and
-                unit_field.value and unit_field.value.strip() and
-                price_field.value and price_field.value.strip()):
-            snack = ft.SnackBar(content=ft.Text("Wszystkie pola muszą być wypełnione"), duration=2000)
+        if not (
+            name_field.value
+            and name_field.value.strip()
+            and quantity_field.value
+            and quantity_field.value.strip()
+            and unit_field.value
+            and unit_field.value.strip()
+            and price_field.value
+            and price_field.value.strip()
+        ):
+            snack = ft.SnackBar(
+                content=ft.Text("Wszystkie pola muszą być wypełnione"), duration=2000
+            )
             page.overlay.append(snack)
             snack.open = True
             page.update()
             return
 
         try:
-            page.run_task(add_item_async, name_field.value.strip(), int(quantity_field.value), unit_field.value.strip(), float(price_field.value))
+            page.run_task(
+                add_item_async,
+                name_field.value.strip(),
+                int(quantity_field.value),
+                unit_field.value.strip(),
+                float(price_field.value),
+            )
             name_field.value = ""
             quantity_field.value = ""
             unit_field.value = "szt."
@@ -111,13 +132,16 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
             snack.open = True
             page.update()
         except ValueError:
-            snack = ft.SnackBar(content=ft.Text("Wypełnij poprawnie wszystkie pola"), duration=2000)
+            snack = ft.SnackBar(
+                content=ft.Text("Wypełnij poprawnie wszystkie pola"), duration=2000
+            )
             page.overlay.append(snack)
             snack.open = True
             page.update()
 
     def go_to_menu(e):
         from desktop_alkozon.ui.pages.login_page import create_main_menu_view
+
         page.clean()
         page.add(create_main_menu_view(page))
         page.update()

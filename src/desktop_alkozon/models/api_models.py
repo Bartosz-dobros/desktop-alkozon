@@ -1,17 +1,17 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional, List
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
+
+from pydantic import BaseModel, EmailStr
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     GUEST = "GUEST"
     CUSTOMER = "CUSTOMER"
     EMPLOYEE = "EMPLOYEE"
     MANAGER = "MANAGER"
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     SUBMITTED = "SUBMITTED"
     IN_PRODUCTION = "IN_PRODUCTION"
     IN_PACKING = "IN_PACKING"
@@ -20,7 +20,7 @@ class OrderStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
-class DeliveryStatus(str, Enum):
+class DeliveryStatus(StrEnum):
     PENDING = "PENDING"
     ASSIGNED = "ASSIGNED"
     IN_TRANSIT = "IN_TRANSIT"
@@ -28,7 +28,7 @@ class DeliveryStatus(str, Enum):
     FAILED = "FAILED"
 
 
-class JobOfferStatus(str, Enum):
+class JobOfferStatus(StrEnum):
     OPEN = "OPEN"
     CLOSED = "CLOSED"
 
@@ -53,13 +53,13 @@ class User(BaseModel):
     id: int
     email: EmailStr
     role: UserRole
-    firstName: Optional[str] = None
-    lastName: Optional[str] = None
-    phone: Optional[str] = None
+    firstName: str | None = None
+    lastName: str | None = None
+    phone: str | None = None
     isActive: bool = True
-    ageConfirmedAt: Optional[datetime] = None
-    createdAt: Optional[datetime] = None
-    updatedAt: Optional[datetime] = None
+    ageConfirmedAt: datetime | None = None
+    createdAt: datetime | None = None
+    updatedAt: datetime | None = None
 
 
 class UserAdminResponse(BaseModel):
@@ -68,31 +68,31 @@ class UserAdminResponse(BaseModel):
     role: UserRole
     active: bool
     courier: bool
-    ageConfirmedAt: Optional[datetime] = None
+    ageConfirmedAt: datetime | None = None
 
 
 class Product(BaseModel):
     id: int
     name: str
-    description: Optional[str] = None
-    category: Optional[str] = None
+    description: str | None = None
+    category: str | None = None
     price: float
-    volumeMl: Optional[int] = None
-    abv: Optional[float] = None
-    imageUrl: Optional[str] = None
+    volumeMl: int | None = None
+    abv: float | None = None
+    imageUrl: str | None = None
     isActive: bool = True
-    createdAt: Optional[datetime] = None
-    updatedAt: Optional[datetime] = None
+    createdAt: datetime | None = None
+    updatedAt: datetime | None = None
 
 
 class InventoryItem(BaseModel):
     id: int
-    productId: Optional[int] = None
-    rawMaterialId: Optional[int] = None
+    productId: int | None = None
+    rawMaterialId: int | None = None
     quantity: int
-    warehouseZone: Optional[str] = None
-    lastUpdatedAt: Optional[datetime] = None
-    product: Optional[Product] = None
+    warehouseZone: str | None = None
+    lastUpdatedAt: datetime | None = None
+    product: Product | None = None
 
 
 class Order(BaseModel):
@@ -101,9 +101,9 @@ class Order(BaseModel):
     status: OrderStatus
     deliveryAddress: str
     totalAmount: float
-    createdAt: Optional[datetime] = None
-    updatedAt: Optional[datetime] = None
-    deliveredAt: Optional[datetime] = None
+    createdAt: datetime | None = None
+    updatedAt: datetime | None = None
+    deliveredAt: datetime | None = None
 
 
 class OrderItem(BaseModel):
@@ -112,44 +112,44 @@ class OrderItem(BaseModel):
     productId: int
     quantity: int
     unitPrice: float
-    product: Optional[Product] = None
+    product: Product | None = None
 
 
 class Delivery(BaseModel):
     id: int
     orderId: int
-    courierId: Optional[int] = None
+    courierId: int | None = None
     status: DeliveryStatus
     addressSnapshot: str
-    startedAt: Optional[datetime] = None
-    deliveredAt: Optional[datetime] = None
-    order: Optional[Order] = None
-    courier: Optional[User] = None
+    startedAt: datetime | None = None
+    deliveredAt: datetime | None = None
+    order: Order | None = None
+    courier: User | None = None
 
 
 class JobOffer(BaseModel):
     id: int
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     status: JobOfferStatus = JobOfferStatus.OPEN
-    createdAt: Optional[datetime] = None
-    updatedAt: Optional[datetime] = None
+    createdAt: datetime | None = None
+    updatedAt: datetime | None = None
 
 
 class WorkLog(BaseModel):
     id: int
     employeeId: int
     clockInAt: datetime
-    clockOutAt: Optional[datetime] = None
-    breakStartedAt: Optional[datetime] = None
-    breakEndedAt: Optional[datetime] = None
-    notes: Optional[str] = None
+    clockOutAt: datetime | None = None
+    breakStartedAt: datetime | None = None
+    breakEndedAt: datetime | None = None
+    notes: str | None = None
 
 
 class JobOfferResponse(BaseModel):
     id: int
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     status: JobOfferStatus
     createdAt: datetime
     updatedAt: datetime
@@ -164,7 +164,7 @@ class InventoryProductRow(BaseModel):
     productId: int
     name: str
     quantity: int
-    warehouseZone: Optional[str] = None
+    warehouseZone: str | None = None
 
 
 class InventoryRawRow(BaseModel):
@@ -175,20 +175,20 @@ class InventoryRawRow(BaseModel):
 
 
 class InventoryOverviewResponse(BaseModel):
-    products: List[InventoryProductRow]
-    rawMaterials: List[InventoryRawRow]
+    products: list[InventoryProductRow]
+    rawMaterials: list[InventoryRawRow]
 
 
 class DeliveryResponse(BaseModel):
     id: int
     orderId: int
-    courierId: Optional[int] = None
-    courierEmail: Optional[str] = None
+    courierId: int | None = None
+    courierEmail: str | None = None
     status: DeliveryStatus
     addressSnapshot: str
-    customerEmail: Optional[str] = None
-    startedAt: Optional[datetime] = None
-    deliveredAt: Optional[datetime] = None
+    customerEmail: str | None = None
+    startedAt: datetime | None = None
+    deliveredAt: datetime | None = None
 
 
 class PatchQuantityRequest(BaseModel):
@@ -207,9 +207,9 @@ class DeliveryAnnouncement(BaseModel):
     id: int
     title: str
     content: str
-    publishedAt: Optional[str] = None
-    createdBy: Optional[int] = None
-    createdAt: Optional[datetime] = None
+    publishedAt: str | None = None
+    createdBy: int | None = None
+    createdAt: datetime | None = None
 
 
 class DeliveryAnnouncementRequest(BaseModel):
@@ -221,23 +221,23 @@ class DeliveryAnnouncementResponse(BaseModel):
     id: int
     title: str
     content: str
-    createdBy: Optional[int] = None
-    createdAt: Optional[datetime] = None
+    createdBy: int | None = None
+    createdAt: datetime | None = None
 
 
 class WorkLogResponse(BaseModel):
     id: int
     employeeId: int
     clockInAt: datetime
-    clockOutAt: Optional[datetime] = None
-    breakStartedAt: Optional[datetime] = None
-    breakEndedAt: Optional[datetime] = None
+    clockOutAt: datetime | None = None
+    breakStartedAt: datetime | None = None
+    breakEndedAt: datetime | None = None
 
 
 class WorkSummaryResponse(BaseModel):
     totalHours: float
     totalBreaks: float
-    entries: List[WorkLogResponse]
+    entries: list[WorkLogResponse]
 
 
 class SalesReport(BaseModel):
@@ -259,7 +259,7 @@ class WarehouseReplenishment(BaseModel):
     status: str
     items: list[dict]
     createdAt: datetime
-    createdBy: Optional[int] = None
+    createdBy: int | None = None
 
 
 class CreateReplenishmentRequest(BaseModel):

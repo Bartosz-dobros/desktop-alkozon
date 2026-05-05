@@ -1,18 +1,29 @@
-import pytest
 from desktop_alkozon.models.api_models import (
-    User, UserRole, Product, InventoryItem, Order, OrderStatus,
-    Delivery as ApiDelivery, DeliveryStatus, JobOfferStatus, WorkLog,
-    JobOfferResponse, UserAdminResponse, InventoryOverviewResponse,
-    InventoryProductRow, InventoryRawRow, DeliveryResponse,
-    DeliveryAnnouncementResponse, WorkLogResponse, WorkSummaryResponse
+    DeliveryAnnouncementResponse,
+    DeliveryResponse,
+    DeliveryStatus,
+    InventoryItem,
+    InventoryProductRow,
+    JobOfferResponse,
+    JobOfferStatus,
+    Order,
+    OrderStatus,
+    Product,
+    User,
+    UserAdminResponse,
+    UserRole,
+    WorkLog,
 )
 
 
 class TestJobOfferModel:
     def test_valid_job_offer(self):
         offer = JobOfferResponse(
-            id=1, title="Kierowca", status=JobOfferStatus.OPEN,
-            createdAt="2024-01-01T00:00:00Z", updatedAt="2024-01-01T00:00:00Z"
+            id=1,
+            title="Kierowca",
+            status=JobOfferStatus.OPEN,
+            createdAt="2024-01-01T00:00:00Z",
+            updatedAt="2024-01-01T00:00:00Z",
         )
         assert offer.id == 1
         assert offer.title == "Kierowca"
@@ -20,8 +31,12 @@ class TestJobOfferModel:
 
     def test_job_offer_with_all_fields(self):
         offer = JobOfferResponse(
-            id=5, title="Manager", description="Test", status=JobOfferStatus.CLOSED,
-            createdAt="2024-01-01T00:00:00Z", updatedAt="2024-01-01T00:00:00Z"
+            id=5,
+            title="Manager",
+            description="Test",
+            status=JobOfferStatus.CLOSED,
+            createdAt="2024-01-01T00:00:00Z",
+            updatedAt="2024-01-01T00:00:00Z",
         )
         assert offer.title == "Manager"
         assert offer.status == JobOfferStatus.CLOSED
@@ -31,8 +46,11 @@ class TestJobOfferModel:
 class TestEmployeeModel:
     def test_valid_employee(self):
         emp = UserAdminResponse(
-            id=1, email="jan@example.com", role=UserRole.EMPLOYEE,
-            active=True, courier=False
+            id=1,
+            email="jan@example.com",
+            role=UserRole.EMPLOYEE,
+            active=True,
+            courier=False,
         )
         assert emp.id == 1
         assert emp.email == "jan@example.com"
@@ -41,7 +59,9 @@ class TestEmployeeModel:
 
 class TestWarehouseItemModel:
     def test_valid_warehouse_item(self):
-        item = InventoryProductRow(productId=1, name="Piwo", quantity=100, warehouseZone="A1")
+        item = InventoryProductRow(
+            productId=1, name="Piwo", quantity=100, warehouseZone="A1"
+        )
         assert item.productId == 1
         assert item.name == "Piwo"
         assert item.quantity == 100
@@ -51,13 +71,20 @@ class TestWarehouseItemModel:
         assert item.quantity == 0
 
     def test_warehouse_item_with_category(self):
-        item = InventoryProductRow(productId=1, name="Wodka", quantity=50, warehouseZone="B2")
+        item = InventoryProductRow(
+            productId=1, name="Wodka", quantity=50, warehouseZone="B2"
+        )
         assert item.warehouseZone == "B2"
 
 
 class TestCourierModel:
     def test_valid_courier(self):
-        courier_data = {"id": 1, "email": "jan@example.com", "active": True, "courier": True}
+        courier_data = {
+            "id": 1,
+            "email": "jan@example.com",
+            "active": True,
+            "courier": True,
+        }
         assert courier_data["id"] == 1
         assert courier_data["email"] == "jan@example.com"
 
@@ -69,8 +96,10 @@ class TestCourierModel:
 class TestDeliveryModel:
     def test_valid_delivery(self):
         delivery = DeliveryResponse(
-            id=1, orderId=100, status=DeliveryStatus.IN_TRANSIT,
-            addressSnapshot="Warszawa"
+            id=1,
+            orderId=100,
+            status=DeliveryStatus.IN_TRANSIT,
+            addressSnapshot="Warszawa",
         )
         assert delivery.id == 1
         assert delivery.status == DeliveryStatus.IN_TRANSIT
@@ -117,11 +146,18 @@ class TestApiModels:
         assert item.product is None
 
     def test_order_model(self):
-        order = Order(id=1, customerId=1, status=OrderStatus.SUBMITTED, deliveryAddress="Warszawa", totalAmount=99.99)
+        order = Order(
+            id=1,
+            customerId=1,
+            status=OrderStatus.SUBMITTED,
+            deliveryAddress="Warszawa",
+            totalAmount=99.99,
+        )
         assert order.id == 1
         assert order.status == OrderStatus.SUBMITTED
 
     def test_work_log_model(self):
         from datetime import datetime
+
         work_log = WorkLog(id=1, employeeId=1, clockInAt=datetime.now())
         assert work_log.employeeId == 1
