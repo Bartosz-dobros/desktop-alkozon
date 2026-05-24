@@ -13,8 +13,10 @@ __pycache__/
 # Distribution / packaging
 build/
 dist/
+obfuscated_src/
 *.egg-info/
 *.spec
+!Alkozon.spec
 *.egg
 
 # Flet / desktop specific

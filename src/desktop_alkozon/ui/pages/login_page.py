@@ -108,7 +108,9 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
             login_button.disabled = True
         else:
             remaining = max(0, 5 - auth_service.attempts)
-            status_text.value = f"Login failed. Attempts left: {remaining}"
+            status_text.value = (
+                f"Invalid credentials or 2FA code. Attempts left: {remaining}"
+            )
             status_text.visible = True
 
         page.update()

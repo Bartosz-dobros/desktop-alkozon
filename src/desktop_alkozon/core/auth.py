@@ -80,8 +80,10 @@ class AuthService:
                 "deviceId": self.DEVICE_ID,
             }
 
-            response = await api_client.post("/auth/staff/login", payload)
-            data = response.json()
+            data = await api_client.post("/auth/staff/login", payload)
+            if not isinstance(data, dict):
+                print(f"Login failed: unexpected response type {type(data)}")
+                return False
 
             if data.get("verificationRequired"):
                 self._pending_challenge = data.get("challengeId")
@@ -103,7 +105,17 @@ class AuthService:
             self._pending_challenge = None
             return True
 
+        except httpx.HTTPStatusError as e:
+            # This triggers specifically when the server returns a 4XX or 5XX error code
+            self._api_unavailable = False
+            # e.response.text contains the exact JSON error message from the API!
+            print(
+                f"Login failed! The server rejected the request with this reason: {e.response.text}"
+            )
+            return False
+
         except httpx.RequestError as e:
+            # This triggers when the server is completely unreachable (no internet, bad URL, etc.)
             self._api_unavailable = True
             print(f"Login failed - API unavailable: {e}")
             if email == "manager@example.com" and password == "Manager123!":
@@ -111,9 +123,11 @@ class AuthService:
                 self.attempts = 0
                 return True
             return False
+
         except Exception as e:
+            # This triggers for any other Python bugs in your code
             self._api_unavailable = False
-            print(f"Login failed: {e}")
+            print(f"Login failed - System error: {e}")
             return False
 
     async def verify_staff_login(self, challenge_id: str, code: str) -> bool:
@@ -123,8 +137,10 @@ class AuthService:
                 "deviceId": self.DEVICE_ID,
                 "code": code,
             }
-            response = await api_client.post("/auth/staff/verify-device", payload)
-            data = response.json()
+            data = await api_client.post("/auth/staff/verify-device", payload)
+            if not isinstance(data, dict):
+                print(f"Verification failed: unexpected response type {type(data)}")
+                return False
 
             token_response = TokenResponse(**data)
             self._store_tokens(token_response.accessToken, token_response.refreshToken)
@@ -141,9 +157,28 @@ class AuthService:
             self._api_unavailable = False
             self._pending_challenge = None
             return True
-        except Exception as e:
-            print(f"Verification failed: {e}")
-            return False
+
+        except httpx.HTTPStatusError as e:
+            try:
+                error_data = e.response.json()
+                if (
+                    e.response.status_code == 401
+                    and "Invalid verification code" in error_data.get("message", "")
+                ):
+                    print(
+                        "2FA Failure: The user entered an incorrect verification code."
+                    )
+                    return False
+                else:
+                    print(
+                        f"Verification rejected for a different reason! Status: {e.response.status_code}, Server says: {error_data}"
+                    )
+                    return False
+            except ValueError:
+                print(
+                    f"Verification rejected! Status: {e.response.status_code}, Raw response: {e.response.text}"
+                )
+                return False
 
     def is_demo_mode(self) -> bool:
         return self._demo_mode
@@ -208,8 +243,10 @@ class AuthService:
             if not refresh:
                 return False
 
-            response = await api_client.post("/auth/refresh", {"refreshToken": refresh})
-            data = response.json()
+            data = await api_client.post("/auth/refresh", {"refreshToken": refresh})
+            if not isinstance(data, dict):
+                print(f"Token refresh failed: unexpected response type {type(data)}")
+                return False
             token_response = TokenResponse(**data)
             self._store_tokens(token_response.accessToken, token_response.refreshToken)
 
