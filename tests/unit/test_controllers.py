@@ -75,17 +75,17 @@ class TestWarehouseController:
 
     def test_order_new_item_creates_item(self, controller, mocker):
         mocker.patch.object(controller.service, "add_new_item_sync", return_value=None)
-        item = controller.order_new_item_sync("Nowy Produkt", 50, "szt.", 19.99)
+        item = controller.order_new_item_sync(1, 50)
         assert item is None
 
     def test_order_new_item_with_zero_quantity(self, controller, mocker):
         mocker.patch.object(controller.service, "add_new_item_sync", return_value=None)
-        item = controller.order_new_item_sync("Test", 0, "szt.", 9.99)
+        item = controller.order_new_item_sync(2, 0)
         assert item is None
 
     def test_order_new_item_with_decimals(self, controller, mocker):
         mocker.patch.object(controller.service, "add_new_item_sync", return_value=None)
-        item = controller.order_new_item_sync("Test", 10, "szt.", 9.99)
+        item = controller.order_new_item_sync(3, 10, "Pilne zamowienie")
         assert item is None
 
 

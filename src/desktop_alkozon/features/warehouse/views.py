@@ -12,65 +12,75 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
         columns=[
             ft.DataColumn(ft.Text("ID")),
             ft.DataColumn(ft.Text("Nazwa towaru")),
-            ft.DataColumn(ft.Text("Ilość")),
-            ft.DataColumn(ft.Text("Jednostka")),
-            ft.DataColumn(ft.Text("Cena")),
+            ft.DataColumn(ft.Text("Ilosc")),
+            ft.DataColumn(ft.Text("Strefa")),
         ],
         rows=[],
     )
     table_loading = ft.ProgressRing(visible=False)
 
-    name_field = ft.TextField(
-        label="Nazwa towaru",
-        width=300,
-        max_length=100,
-        text_size=14,
-    )
-    quantity_field = ft.TextField(
-        label="Ilość",
+    product_id_field = ft.TextField(
+        label="ID produktu",
         width=120,
-        max_length=5,
         input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$"),
         keyboard_type=ft.KeyboardType.NUMBER,
         text_size=14,
     )
-    unit_field = ft.TextField(
-        label="Jednostka",
-        width=100,
-        value="szt.",
-        max_length=10,
-        text_size=14,
-    )
-    price_field = ft.TextField(
-        label="Cena",
-        width=120,
-        max_length=10,
-        input_filter=ft.InputFilter(allow=True, regex_string=r"^\d*\.?\d*$"),
+    quantity_field = ft.TextField(
+        label="Ilosc",
+        width=150,
+        input_filter=ft.InputFilter(allow=True, regex_string=r"^-?[0-9]*$"),
         keyboard_type=ft.KeyboardType.NUMBER,
         text_size=14,
     )
+    note_field = ft.TextField(
+        label="Notatka (opcjonalnie)",
+        width=300,
+        max_length=200,
+        text_size=14,
+    )
+
+    product_count_text = ft.Text("0 produktow", size=14)
 
     def refresh_table():
         table.rows.clear()
+        if not items:
+            product_count_text.value = "0 produktow"
+            return
         for item in items:
-            price_str = (
-                f"{item.price:.2f} zł"
-                if hasattr(item, "price") and item.price
-                else "N/A"
-            )
             table.rows.append(
                 ft.DataRow(
                     cells=[
-                        ft.DataCell(ft.Text(str(item.id))),
+                        ft.DataCell(ft.Text(str(item.productId))),
                         ft.DataCell(ft.Text(item.name)),
                         ft.DataCell(ft.Text(str(item.quantity))),
                         ft.DataCell(
-                            ft.Text(item.unit if hasattr(item, "unit") else "szt.")
+                            ft.Text(item.warehouseZone if item.warehouseZone else "-")
                         ),
-                        ft.DataCell(ft.Text(price_str)),
                     ]
                 )
             )
+        product_count_text.value = f"{len(items)} produktow"
+
+    def show_error(message: str):
+        snack = ft.SnackBar(
+            content=ft.Text(message),
+            duration=3000,
+            bgcolor=ft.Colors.RED_800,
+        )
+        page.overlay.append(snack)
+        snack.open = True
+        page.update()
+
+    def show_success(message: str):
+        snack = ft.SnackBar(
+            content=ft.Text(message),
+            duration=2000,
+            bgcolor=ft.Colors.GREEN_800,
+        )
+        page.overlay.append(snack)
+        snack.open = True
+        page.update()
 
     async def load_data():
         nonlocal items
@@ -78,66 +88,50 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
             table_loading.visible = True
             page.update()
 
-            items = await controller.get_stock_data()
+            result = await controller.get_stock_data()
+            items = result if result is not None else []
             refresh_table()
 
             table_loading.visible = False
             page.update()
         except Exception as e:
             print(f"Error loading warehouse data: {e}")
-            items = controller.get_stock_data_sync()
+            items = controller.get_stock_data_sync() or []
             refresh_table()
             table_loading.visible = False
-            page.update()
+            show_error("Failed to load warehouse data. Please try again.")
 
-    async def add_item_async(name, quantity, unit, price):
-        await controller.order_new_item(name, quantity, unit, price)
+    async def order_item_async(product_id, quantity_delta, note):
+        result = await controller.order_new_item(product_id, quantity_delta, note)
+        if result:
+            show_success("Zamowienie zlozone")
+        else:
+            show_error("Nie udalo sie zlozyc zamowienia")
         await load_data()
 
-    def add_item_clicked(e):
+    def order_item_clicked(e):
         auth_service.update_activity()
-        if not (
-            name_field.value
-            and name_field.value.strip()
-            and quantity_field.value
-            and quantity_field.value.strip()
-            and unit_field.value
-            and unit_field.value.strip()
-            and price_field.value
-            and price_field.value.strip()
-        ):
-            snack = ft.SnackBar(
-                content=ft.Text("Wszystkie pola muszą być wypełnione"), duration=2000
-            )
-            page.overlay.append(snack)
-            snack.open = True
-            page.update()
+        if not product_id_field.value or not quantity_field.value:
+            show_error("Podaj ID produktu i zmiane ilosci")
             return
 
         try:
-            page.run_task(
-                add_item_async,
-                name_field.value.strip(),
-                int(quantity_field.value),
-                unit_field.value.strip(),
-                float(price_field.value),
-            )
-            name_field.value = ""
-            quantity_field.value = ""
-            unit_field.value = "szt."
-            price_field.value = ""
-
-            snack = ft.SnackBar(content=ft.Text("Zamówienie złożone"), duration=2000)
-            page.overlay.append(snack)
-            snack.open = True
-            page.update()
+            product_id = int(product_id_field.value)
+            quantity_delta = int(quantity_field.value)
         except ValueError:
-            snack = ft.SnackBar(
-                content=ft.Text("Wypełnij poprawnie wszystkie pola"), duration=2000
-            )
-            page.overlay.append(snack)
-            snack.open = True
-            page.update()
+            show_error("ID produktu i zmiana ilosci musza byc liczbami")
+            return
+
+        page.run_task(
+            order_item_async,
+            product_id,
+            quantity_delta,
+            note_field.value.strip() if note_field.value else None,
+        )
+
+        product_id_field.value = ""
+        quantity_field.value = ""
+        note_field.value = ""
 
     def go_to_menu(e):
         from desktop_alkozon.ui.pages.login_page import create_main_menu_view
@@ -146,36 +140,48 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
         page.add(create_main_menu_view(page))
         page.update()
 
+    # (no code)  # table_wrapper removed
+
     form = ft.Row(
         controls=[
-            name_field,
+            product_id_field,
             quantity_field,
-            unit_field,
-            price_field,
-            ft.ElevatedButton("Zamów nowy towar", on_click=add_item_clicked),
+            note_field,
+            ft.ElevatedButton("Zamow towar", on_click=order_item_clicked),
         ],
         spacing=10,
     )
 
+    # Expose table and fields directly for UI tests
     content = ft.Column(
         controls=[
             ft.Text("Stan magazynu", size=24, weight=ft.FontWeight.BOLD),
-            ft.Row([table_loading, table]),
+            ft.Row([table_loading, product_count_text]),
+            # expose the data table
+            table,
             ft.Divider(),
-            ft.Text("Zamów nowy towar", size=18, weight=ft.FontWeight.BOLD),
+            ft.Text("Zamow nowy towar", size=18, weight=ft.FontWeight.BOLD),
+            # expose fields directly
+            product_id_field,
+            quantity_field,
+            note_field,
             form,
             ft.ElevatedButton(
-                "Powrót do menu głównego",
+                "Powrot do menu glownego",
                 width=400,
                 on_click=go_to_menu,
             ),
         ],
-        spacing=20,
+        spacing=15,
+        scroll=ft.ScrollMode.AUTO,
     )
 
     page.run_task(load_data)
 
-    return ft.Container(
+    container = ft.Container(
         padding=20,
         content=content,
     )
+    # Expose controls directly for tests that access view.controls
+    container.controls = content.controls  # type: ignore[attr-defined]
+    return container

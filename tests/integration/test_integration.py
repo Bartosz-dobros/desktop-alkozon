@@ -74,7 +74,7 @@ class TestFeatureIntegration:
         controller = WarehouseController()
         stock = controller.get_stock_data_sync()
 
-        assert stock is None or isinstance(stock, type(None))
+        assert isinstance(stock, list)
 
     def test_deliveries_create_flow(self):
         from desktop_alkozon.features.deliveries.controller import DeliveriesController

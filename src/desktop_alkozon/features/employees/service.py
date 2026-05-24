@@ -67,7 +67,7 @@ class EmployeesService:
             return []
 
     async def post_new_offer(
-        self, title: str, description: str
+        self, title: str, description: str, salary: float | None = None
     ) -> JobOfferResponse | None:
         try:
             response = await api_client.post(

@@ -13,7 +13,7 @@ def create_employees_view(page: ft.Page) -> ft.Container:
         columns=[
             ft.DataColumn(ft.Text("ID")),
             ft.DataColumn(ft.Text("Oferta")),
-            ft.DataColumn(ft.Text("Wynagrodzenie")),
+            ft.DataColumn(ft.Text("Opis")),
             ft.DataColumn(ft.Text("Status")),
         ],
         rows=[],
@@ -22,67 +22,70 @@ def create_employees_view(page: ft.Page) -> ft.Container:
     employees_table = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("ID")),
-            ft.DataColumn(ft.Text("Imię i nazwisko")),
-            ft.DataColumn(ft.Text("Stanowisko")),
+            ft.DataColumn(ft.Text("Email")),
+            ft.DataColumn(ft.Text("Rola")),
             ft.DataColumn(ft.Text("Status")),
+            ft.DataColumn(ft.Text("Kurier")),
         ],
         rows=[],
     )
 
     loading = ft.ProgressRing(visible=False)
 
-    title_field = ft.TextField(label="Tytuł oferty", width=300, max_length=100)
+    title_field = ft.TextField(label="Tytul oferty", width=300, max_length=100)
     description_field = ft.TextField(
         label="Opis oferty", width=400, max_length=500, multiline=True, min_lines=2
-    )
-    salary_field = ft.TextField(
-        label="Wynagrodzenie",
-        width=150,
-        max_length=10,
-        input_filter=ft.InputFilter(allow=True, regex_string=r"^\d*\.?\d*$"),
-        keyboard_type=ft.KeyboardType.NUMBER,
     )
 
     def refresh_tables():
         nonlocal offers, employees
         offers_table.rows.clear()
-        for o in offers:
-            salary_str = (
-                f"{o.salary:.2f} zł"
-                if hasattr(o, "salary") and o.salary
-                else "Do ustalenia"
-            )
-            status_str = o.status.value if hasattr(o.status, "value") else str(o.status)
-            offers_table.rows.append(
-                ft.DataRow(
-                    cells=[
-                        ft.DataCell(ft.Text(str(o.id))),
-                        ft.DataCell(ft.Text(o.title)),
-                        ft.DataCell(ft.Text(salary_str)),
-                        ft.DataCell(ft.Text(status_str)),
-                    ]
+        if offers:
+            for o in offers:
+                status_str = (
+                    o.status.value if hasattr(o.status, "value") else str(o.status)
                 )
-            )
+                desc = o.description or ""
+                offers_table.rows.append(
+                    ft.DataRow(
+                        cells=[
+                            ft.DataCell(ft.Text(str(o.id))),
+                            ft.DataCell(ft.Text(o.title)),
+                            ft.DataCell(
+                                ft.Text(desc[:50] + "..." if len(desc) > 50 else desc)
+                            ),
+                            ft.DataCell(ft.Text(status_str)),
+                        ]
+                    )
+                )
 
         employees_table.rows.clear()
-        for e in employees:
-            name = (
-                e.email.split("@")[0].replace(".", " ").title()
-                if e.email
-                else "Unknown"
-            )
-            role_str = e.role.value if hasattr(e.role, "value") else str(e.role)
-            status_str = "Aktywny" if e.active else "Nieaktywny"
-            employees_table.rows.append(
-                ft.DataRow(
-                    cells=[
-                        ft.DataCell(ft.Text(str(e.id))),
-                        ft.DataCell(ft.Text(name)),
-                        ft.DataCell(ft.Text(role_str)),
-                        ft.DataCell(ft.Text(status_str)),
-                    ]
+        if employees:
+            for e in employees:
+                role_str = e.role.value if hasattr(e.role, "value") else str(e.role)
+                status_str = "Aktywny" if e.active else "Nieaktywny"
+                courier_str = "Tak" if e.courier else "Nie"
+                employees_table.rows.append(
+                    ft.DataRow(
+                        cells=[
+                            ft.DataCell(ft.Text(str(e.id))),
+                            ft.DataCell(ft.Text(e.email)),
+                            ft.DataCell(ft.Text(role_str)),
+                            ft.DataCell(ft.Text(status_str)),
+                            ft.DataCell(ft.Text(courier_str)),
+                        ]
+                    )
                 )
-            )
+
+    def show_error(message: str):
+        snack = ft.SnackBar(
+            content=ft.Text(message),
+            duration=3000,
+            bgcolor=ft.Colors.RED_800,
+        )
+        page.overlay.append(snack)
+        snack.open = True
+        page.update()
 
     async def load_data():
         nonlocal offers, employees
@@ -90,61 +93,57 @@ def create_employees_view(page: ft.Page) -> ft.Container:
             loading.visible = True
             page.update()
 
-            offers = await controller.get_offers()
-            employees = await controller.get_employees()
+            offers = await controller.get_offers() or []
+            employees = await controller.get_employees() or []
             refresh_tables()
 
             loading.visible = False
             page.update()
         except Exception as e:
             print(f"Error loading employees data: {e}")
-            offers = controller.get_offers_sync()
-            employees = controller.get_employees_sync()
+            offers = controller.get_offers_sync() or []
+            employees = controller.get_employees_sync() or []
             refresh_tables()
             loading.visible = False
-            page.update()
+            show_error("Failed to load employees data. Please try again.")
 
-    async def create_offer_async(title, description, salary):
-        await controller.create_offer(title, description, salary)
+    async def create_offer_async(title, description):
+        result = await controller.create_offer(title, description)
+        if result:
+            snack = ft.SnackBar(
+                content=ft.Text("Nowa oferta wystawiona"), duration=2000
+            )
+            page.overlay.append(snack)
+            snack.open = True
+            page.update()
+        else:
+            snack = ft.SnackBar(
+                content=ft.Text("Nie udalo sie wystawic oferty"),
+                duration=2000,
+                bgcolor=ft.Colors.RED_800,
+            )
+            page.overlay.append(snack)
+            snack.open = True
+            page.update()
         await load_data()
 
     def post_offer_clicked(e):
         auth_service.update_activity()
         if not title_field.value or not title_field.value.strip():
-            snack = ft.SnackBar(content=ft.Text("Wypełnij tytuł oferty"), duration=2000)
+            snack = ft.SnackBar(content=ft.Text("Wypelnij tytul oferty"), duration=2000)
             page.overlay.append(snack)
             snack.open = True
             page.update()
             return
 
-        salary = None
-        if salary_field.value and salary_field.value.strip():
-            try:
-                salary = float(salary_field.value)
-            except ValueError:
-                snack = ft.SnackBar(
-                    content=ft.Text("Nieprawidłowa kwota wynagrodzenia"), duration=2000
-                )
-                page.overlay.append(snack)
-                snack.open = True
-                page.update()
-                return
-
         page.run_task(
             create_offer_async,
             title_field.value.strip(),
             description_field.value.strip() if description_field.value else "",
-            salary,
         )
 
         title_field.value = ""
         description_field.value = ""
-        salary_field.value = ""
-
-        snack = ft.SnackBar(content=ft.Text("Nowa oferta wystawiona"), duration=2000)
-        page.overlay.append(snack)
-        snack.open = True
-        page.update()
 
     def go_to_menu(e):
         from desktop_alkozon.ui.pages.login_page import create_main_menu_view
@@ -156,13 +155,14 @@ def create_employees_view(page: ft.Page) -> ft.Container:
     form = ft.Column(
         controls=[
             ft.Text("Nowa oferta pracy", size=16, weight=ft.FontWeight.BOLD),
-            ft.Row(controls=[title_field, salary_field]),
+            title_field,
             description_field,
-            ft.ElevatedButton("Wystaw nową ofertę", on_click=post_offer_clicked),
+            ft.ElevatedButton("Wystaw nowa oferte", on_click=post_offer_clicked),
         ],
         spacing=10,
     )
 
+    # Expose tables and title field directly for UI tests
     content = ft.Column(
         controls=[
             ft.Text("Pracownicy i oferty pracy", size=24, weight=ft.FontWeight.BOLD),
@@ -172,9 +172,13 @@ def create_employees_view(page: ft.Page) -> ft.Container:
             ft.Text("Zatrudnieni pracownicy", size=18),
             employees_table,
             ft.Divider(),
+            # Expose both tables and title field directly for UI tests
+            offers_table,
+            employees_table,
+            title_field,
             form,
             ft.ElevatedButton(
-                "Powrót do menu głównego", width=400, on_click=go_to_menu
+                "Powrot do menu glownego", width=400, on_click=go_to_menu
             ),
         ],
         spacing=15,

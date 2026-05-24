@@ -75,7 +75,7 @@ jobs:
           pip install pytest pytest-asyncio pytest-mock email-validator
 
       - name: Run integration tests
-        run: python -m pytest tests/integration/ -v
+        run: python -m pytest tests/integration/ tests/api/ -v
 
   feature-tests:
     runs-on: ubuntu-latest

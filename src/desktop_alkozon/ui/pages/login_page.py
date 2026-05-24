@@ -6,6 +6,8 @@ from desktop_alkozon.core.auth import auth_service
 
 def create_login_page_view(page: ft.Page) -> ft.Container:
     loading = [False]
+    verification_required = [False]
+    challenge_id = [None]
 
     username_field = ft.TextField(
         label="Username / Email",
@@ -25,8 +27,8 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         max_length=128,
         text_size=16,
     )
-    two_fa_field = ft.TextField(
-        label="2FA Code (6 digits)",
+    verification_field = ft.TextField(
+        label="Verification Code (4 digits)",
         width=400,
         border_radius=8,
         visible=False,
@@ -52,35 +54,62 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         status_text.visible = False
         page.update()
 
-        success = await auth_service.login(
-            username_field.value or "",
-            password_field.value or "",
-            two_fa_field.value if two_fa_field.visible else None,
-        )
+        if not verification_required[0]:
+            success = await auth_service.login(
+                username_field.value or "",
+                password_field.value or "",
+            )
 
-        if success:
-            loading[0] = False
-            page.clean()
-            page.add(create_main_menu_view(page))
+            if not success and auth_service.get_pending_challenge():
+                verification_required[0] = True
+                challenge_id[0] = auth_service.get_pending_challenge()
+                verification_field.visible = True
+                loading[0] = False
+                login_button.disabled = False
+                login_button.content = ft.Text("ENTER CODE")
+                status_text.value = "Verification code sent to your email"
+                status_text.visible = True
+                page.update()
+                return
+
+            if success:
+                loading[0] = False
+                page.clean()
+                page.add(create_main_menu_view(page))
+                page.update()
+                return
+
+        if verification_required[0]:
+            success = await auth_service.verify_staff_login(
+                challenge_id[0] or "",
+                verification_field.value or "",
+            )
+
+            if success:
+                loading[0] = False
+                verification_required[0] = False
+                challenge_id[0] = None
+                page.clean()
+                page.add(create_main_menu_view(page))
+                page.update()
+                return
+
+        loading[0] = False
+        login_button.disabled = False
+        login_button.content = ft.Text("LOGIN")
+        if auth_service.is_api_unavailable():
+            status_text.value = (
+                "Cannot connect to server. Please check your connection."
+            )
+            status_text.visible = True
+        elif auth_service.is_locked():
+            status_text.value = "Account locked. Restart the app."
+            status_text.visible = True
+            login_button.disabled = True
         else:
-            loading[0] = False
-            login_button.disabled = False
-            login_button.content = ft.Text("LOGIN")
-            if auth_service.is_api_unavailable():
-                status_text.value = (
-                    "Cannot connect to server. Please check your connection."
-                )
-                status_text.visible = True
-            elif auth_service.is_locked():
-                status_text.value = "Account locked. Restart the app."
-                status_text.visible = True
-                login_button.disabled = True
-            else:
-                remaining = max(0, 5 - auth_service.attempts)
-                status_text.value = f"Login failed. Attempts left: {remaining}"
-                status_text.visible = True
-                if auth_service.attempts >= 3:
-                    two_fa_field.visible = True
+            remaining = max(0, 5 - auth_service.attempts)
+            status_text.value = f"Login failed. Attempts left: {remaining}"
+            status_text.visible = True
 
         page.update()
 
@@ -98,7 +127,7 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         ft.Divider(),
         username_field,
         password_field,
-        two_fa_field,
+        verification_field,
         status_text,
         login_button,
         ft.TextButton("Forgot password?", on_click=lambda e: print("TODO: reset")),
@@ -107,7 +136,7 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
     if is_demo_mode_enabled():
         controls.append(
             ft.ElevatedButton(
-                "Enter Demo Mode (Offline)",
+                "Demo Mode",
                 width=400,
                 on_click=lambda e: page.run_task(enter_demo_mode, page),
                 style=ft.ButtonStyle(bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE),

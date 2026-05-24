@@ -254,13 +254,23 @@ class InventoryReport(BaseModel):
     recentMovements: list[dict]
 
 
+class ReplenishmentLine(BaseModel):
+    id: int
+    productId: int | None = None
+    rawMaterialId: int | None = None
+    quantityDelta: int
+    productName: str | None = None
+    rawMaterialName: str | None = None
+
+
 class WarehouseReplenishment(BaseModel):
     id: int
     status: str
-    items: list[dict]
+    note: str | None = None
     createdAt: datetime
-    createdBy: int | None = None
+    lines: list[ReplenishmentLine] | None = None
 
 
 class CreateReplenishmentRequest(BaseModel):
-    items: list[dict]
+    lines: list[dict]
+    note: str | None = None

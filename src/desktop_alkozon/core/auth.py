@@ -12,13 +12,22 @@ from desktop_alkozon.services.api_client import api_client
 class LoginCredentials(BaseModel):
     email: EmailStr
     password: str
+    device_id: str = "desktop-001"
     two_fa_code: str | None = None
+
+
+class StaffLoginResponse(BaseModel):
+    verification_required: bool
+    challenge_id: str | None = None
+    tokens: TokenResponse | None = None
+    message: str | None = None
 
 
 class AuthService:
     MAX_ATTEMPTS = 5
     INACTIVITY_TIMEOUT = 1800
     SERVICE_NAME = "desktop_alkozon"
+    DEVICE_ID = "desktop-001"
 
     def __init__(self):
         self.attempts = 0
@@ -27,6 +36,7 @@ class AuthService:
         self._current_user = None
         self._api_unavailable = False
         self._demo_mode = False
+        self._pending_challenge = None
 
     def _get_stored_token(self) -> str | None:
         return keyring.get_password(self.SERVICE_NAME, "access_token")
@@ -64,11 +74,20 @@ class AuthService:
             return False
 
         try:
-            payload = {"email": email, "password": password}
+            payload = {
+                "email": email,
+                "password": password,
+                "deviceId": self.DEVICE_ID,
+            }
 
-            response = await api_client.post("/auth/login", payload)
-            token_response = TokenResponse(**response)
+            response = await api_client.post("/auth/staff/login", payload)
+            data = response.json()
 
+            if data.get("verificationRequired"):
+                self._pending_challenge = data.get("challengeId")
+                return False
+
+            token_response = TokenResponse(**data)
             self._store_tokens(token_response.accessToken, token_response.refreshToken)
 
             claims = self._decode_jwt(token_response.accessToken)
@@ -81,6 +100,7 @@ class AuthService:
             self.attempts = 0
             self.update_activity()
             self._api_unavailable = False
+            self._pending_challenge = None
             return True
 
         except httpx.RequestError as e:
@@ -94,6 +114,35 @@ class AuthService:
         except Exception as e:
             self._api_unavailable = False
             print(f"Login failed: {e}")
+            return False
+
+    async def verify_staff_login(self, challenge_id: str, code: str) -> bool:
+        try:
+            payload = {
+                "challengeId": challenge_id,
+                "deviceId": self.DEVICE_ID,
+                "code": code,
+            }
+            response = await api_client.post("/auth/staff/verify-device", payload)
+            data = response.json()
+
+            token_response = TokenResponse(**data)
+            self._store_tokens(token_response.accessToken, token_response.refreshToken)
+
+            claims = self._decode_jwt(token_response.accessToken)
+            self._current_user = {
+                "id": int(claims.get("sub", 0)),
+                "email": claims.get("email", ""),
+                "role": claims.get("role", "EMPLOYEE"),
+            }
+
+            self.attempts = 0
+            self.update_activity()
+            self._api_unavailable = False
+            self._pending_challenge = None
+            return True
+        except Exception as e:
+            print(f"Verification failed: {e}")
             return False
 
     def is_demo_mode(self) -> bool:
@@ -147,6 +196,7 @@ class AuthService:
         self._current_user = None
         self.attempts = 0
         self.locked = False
+        self._pending_challenge = None
 
     def is_authenticated(self) -> bool:
         token = self._get_stored_token()
@@ -159,8 +209,8 @@ class AuthService:
                 return False
 
             response = await api_client.post("/auth/refresh", {"refreshToken": refresh})
-
-            token_response = TokenResponse(**response)
+            data = response.json()
+            token_response = TokenResponse(**data)
             self._store_tokens(token_response.accessToken, token_response.refreshToken)
 
             claims = self._decode_jwt(token_response.accessToken)
@@ -183,6 +233,9 @@ class AuthService:
 
     def get_current_user(self) -> dict | None:
         return self._current_user
+
+    def get_pending_challenge(self) -> str | None:
+        return self._pending_challenge
 
 
 auth_service = AuthService()

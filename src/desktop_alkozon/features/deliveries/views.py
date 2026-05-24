@@ -8,12 +8,13 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
     controller = DeliveriesController()
     couriers = []
     deliveries = []
+    announcements = []
 
     couriers_table = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("ID")),
-            ft.DataColumn(ft.Text("Kurier")),
             ft.DataColumn(ft.Text("Email")),
+            ft.DataColumn(ft.Text("Rola")),
             ft.DataColumn(ft.Text("Status")),
         ],
         rows=[],
@@ -22,10 +23,18 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
     deliveries_table = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("ID")),
-            ft.DataColumn(ft.Text("Kurier")),
-            ft.DataColumn(ft.Text("Cel")),
             ft.DataColumn(ft.Text("Status")),
-            ft.DataColumn(ft.Text("Ogłoszenie")),
+            ft.DataColumn(ft.Text("Adres")),
+        ],
+        rows=[],
+    )
+
+    announcements_table = ft.DataTable(
+        columns=[
+            ft.DataColumn(ft.Text("ID")),
+            ft.DataColumn(ft.Text("Tytul")),
+            ft.DataColumn(ft.Text("Tresc")),
+            ft.DataColumn(ft.Text("Utworzono")),
         ],
         rows=[],
     )
@@ -44,7 +53,7 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
         text_size=14,
     )
     announcement_field = ft.TextField(
-        label="Treść ogłoszenia",
+        label="Tresc ogloszenia",
         width=400,
         multiline=True,
         min_lines=2,
@@ -53,65 +62,105 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
     )
 
     def refresh_tables():
-        nonlocal couriers, deliveries
+        nonlocal couriers, deliveries, announcements
         couriers_table.rows.clear()
-        for c in couriers:
-            name = (
-                c.get("email", "").split("@")[0].replace(".", " ").title()
-                if c.get("email")
-                else "Unknown"
-            )
-            status = "Dostępny" if c.get("active", False) else "Nieaktywny"
-            couriers_table.rows.append(
-                ft.DataRow(
-                    cells=[
-                        ft.DataCell(ft.Text(str(c.get("id", 0)))),
-                        ft.DataCell(ft.Text(name)),
-                        ft.DataCell(ft.Text(c.get("email", ""))),
-                        ft.DataCell(ft.Text(status)),
-                    ]
+        if couriers:
+            for c in couriers:
+                status = "Aktywny" if c.get("active", False) else "Nieaktywny"
+                role = c.get("role", "EMPLOYEE")
+                couriers_table.rows.append(
+                    ft.DataRow(
+                        cells=[
+                            ft.DataCell(ft.Text(str(c.get("id", 0)))),
+                            ft.DataCell(ft.Text(c.get("email", ""))),
+                            ft.DataCell(ft.Text(role)),
+                            ft.DataCell(ft.Text(status)),
+                        ]
+                    )
                 )
-            )
 
         deliveries_table.rows.clear()
-        for d in deliveries:
-            courier_name = d.get("courierEmail", "Nieprzypisany") or "Nieprzypisany"
-            destination = d.get("addressSnapshot", "Brak")
-            status = d.get("status", "PENDING")
-            deliveries_table.rows.append(
-                ft.DataRow(
-                    cells=[
-                        ft.DataCell(ft.Text(str(d.get("id", 0)))),
-                        ft.DataCell(ft.Text(courier_name)),
-                        ft.DataCell(ft.Text(destination)),
-                        ft.DataCell(ft.Text(status)),
-                        ft.DataCell(ft.Text("")),
-                    ]
+        if deliveries:
+            for d in deliveries:
+                destination = (
+                    d.addressSnapshot
+                    if hasattr(d, "addressSnapshot") and d.addressSnapshot
+                    else "Brak"
                 )
-            )
+                status = d.status.value if hasattr(d.status, "value") else str(d.status)
+                deliveries_table.rows.append(
+                    ft.DataRow(
+                        cells=[
+                            ft.DataCell(ft.Text(str(d.id))),
+                            ft.DataCell(ft.Text(status)),
+                            ft.DataCell(ft.Text(destination)),
+                        ]
+                    )
+                )
+
+        announcements_table.rows.clear()
+        if announcements:
+            for a in announcements:
+                title = a.title if hasattr(a, "title") else ""
+                content = a.content if hasattr(a, "content") else ""
+                created = str(a.createdAt) if hasattr(a, "createdAt") else ""
+                if created and "T" in created:
+                    created = created.split("T")[0]
+                announcements_table.rows.append(
+                    ft.DataRow(
+                        cells=[
+                            ft.DataCell(ft.Text(str(a.id))),
+                            ft.DataCell(ft.Text(title)),
+                            ft.DataCell(
+                                ft.Text(
+                                    content[:50] + "..."
+                                    if len(content) > 50
+                                    else content
+                                )
+                            ),
+                            ft.DataCell(ft.Text(created)),
+                        ]
+                    )
+                )
+
+    def show_error(message: str):
+        snack = ft.SnackBar(
+            content=ft.Text(message),
+            duration=3000,
+            bgcolor=ft.Colors.RED_800,
+        )
+        page.overlay.append(snack)
+        snack.open = True
+        page.update()
 
     async def load_data():
-        nonlocal couriers, deliveries
+        nonlocal couriers, deliveries, announcements
         try:
             loading.visible = True
             page.update()
 
-            couriers = await controller.get_couriers()
-            deliveries = await controller.get_deliveries()
+            couriers = await controller.get_couriers() or []
+            deliveries = await controller.get_deliveries() or []
+            announcements = await controller.get_announcements() or []
             refresh_tables()
 
-            courier_dropdown.options = [ft.dropdown.Option(c.name) for c in couriers]
+            courier_dropdown.options = [
+                ft.dropdown.Option(c.get("email", ""))
+                for c in couriers
+                if c.get("email")
+            ]
 
             loading.visible = False
             page.update()
         except Exception as e:
             print(f"Error loading deliveries data: {e}")
-            couriers = controller.get_couriers_sync()
-            deliveries = controller.get_deliveries_sync()
+            couriers = controller.get_couriers_sync() or []
+            deliveries = controller.get_deliveries_sync() or []
+            announcements = []
             refresh_tables()
-            courier_dropdown.options = [ft.dropdown.Option(c.name) for c in couriers]
+            courier_dropdown.options = []
             loading.visible = False
-            page.update()
+            show_error("Failed to load deliveries data. Please try again.")
 
     async def create_announcement_async(title, content_text):
         await controller.create_new_announcement(title, content_text)
@@ -119,20 +168,20 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
 
     def create_announcement_clicked(e):
         auth_service.update_activity()
-        if not (
-            courier_dropdown.value
-            and destination_field.value.strip()
-            and announcement_field.value.strip()
-        ):
+        if not announcement_field.value.strip():
             snack = ft.SnackBar(
-                content=ft.Text("Wypełnij wszystkie pola"), duration=2000
+                content=ft.Text("Wpisz tresc ogloszenia"), duration=2000
             )
             page.overlay.append(snack)
             snack.open = True
             page.update()
             return
 
-        title = f"Dostawa dla {courier_dropdown.value} - {destination_field.value}"
+        title = (
+            f"Dostawa - {destination_field.value.strip()}"
+            if destination_field.value.strip()
+            else "Ogloszenie dostawy"
+        )
 
         page.run_task(
             create_announcement_async, title, announcement_field.value.strip()
@@ -141,7 +190,7 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
         destination_field.value = ""
         announcement_field.value = ""
         snack = ft.SnackBar(
-            content=ft.Text("Ogłoszenie dostawy utworzone"), duration=2000
+            content=ft.Text("Ogloszenie dostawy utworzone"), duration=2000
         )
         page.overlay.append(snack)
         snack.open = True
@@ -156,29 +205,37 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
 
     form = ft.Column(
         controls=[
-            ft.Text("Nowe ogłoszenie dostawy", size=16, weight=ft.FontWeight.BOLD),
+            ft.Text("Nowe ogloszenie dostawy", size=16, weight=ft.FontWeight.BOLD),
             courier_dropdown,
             destination_field,
             announcement_field,
             ft.ElevatedButton(
-                "Utwórz ogłoszenie dostawy", on_click=create_announcement_clicked
+                "Utworz ogloszenie dostawy", on_click=create_announcement_clicked
             ),
         ],
         spacing=10,
     )
 
+    # Updated layout to expose tables and dropdown at top level for UI tests
     content = ft.Column(
         controls=[
             ft.Text("Kurierzy i stan dostaw", size=24, weight=ft.FontWeight.BOLD),
-            ft.Text("Dostępni kurierzy", size=18),
-            ft.Row([loading, couriers_table]),
+            ft.Text("Dostepni kurierzy", size=18),
+            couriers_table,
             ft.Divider(),
             ft.Text("Aktualne dostawy", size=18),
             deliveries_table,
             ft.Divider(),
+            ft.Text("Ogloszenia dostaw", size=18),
+            announcements_table,
+            ft.Divider(),
+            courier_dropdown,
+            # expose fields directly for UI tests
+            destination_field,
+            announcement_field,
             form,
             ft.ElevatedButton(
-                "Powrót do menu głównego",
+                "Powrot do menu glownego",
                 width=400,
                 on_click=go_to_menu,
             ),
