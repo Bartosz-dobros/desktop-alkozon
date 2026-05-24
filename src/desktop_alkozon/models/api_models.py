@@ -40,7 +40,7 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     accessToken: str
-    refreshToken: str
+    refreshToken: str | None = None
     tokenType: str = "Bearer"
     expiresInSeconds: int
 

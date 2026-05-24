@@ -3,7 +3,7 @@ import time
 import httpx
 import jwt
 import keyring
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from desktop_alkozon.models.api_models import TokenResponse
 from desktop_alkozon.services.api_client import api_client
@@ -17,8 +17,8 @@ class LoginCredentials(BaseModel):
 
 
 class StaffLoginResponse(BaseModel):
-    verification_required: bool
-    challenge_id: str | None = None
+    verification_required: bool = Field(alias="verificationRequired")
+    challenge_id: str | None = Field(alias="challengeId", default=None)
     tokens: TokenResponse | None = None
     message: str | None = None
 
@@ -84,15 +84,19 @@ class AuthService:
             if not isinstance(data, dict):
                 print(f"Login failed: unexpected response type {type(data)}")
                 return False
+            response_data = StaffLoginResponse(**data)
 
-            if data.get("verificationRequired"):
-                self._pending_challenge = data.get("challengeId")
+            if response_data.verification_required:
+                self._pending_challenge = response_data.challenge_id
                 return False
+            if not response_data.tokens:
+                print("Login failed: API returned no tokens.")
+                return False
+            self._store_tokens(
+                response_data.tokens.accessToken, response_data.tokens.refreshToken
+            )
 
-            token_response = TokenResponse(**data)
-            self._store_tokens(token_response.accessToken, token_response.refreshToken)
-
-            claims = self._decode_jwt(token_response.accessToken)
+            claims = self._decode_jwt(response_data.tokens.accessToken)
             self._current_user = {
                 "id": int(claims.get("sub", 0)),
                 "email": claims.get("email", email),
@@ -106,16 +110,13 @@ class AuthService:
             return True
 
         except httpx.HTTPStatusError as e:
-            # This triggers specifically when the server returns a 4XX or 5XX error code
             self._api_unavailable = False
-            # e.response.text contains the exact JSON error message from the API!
             print(
                 f"Login failed! The server rejected the request with this reason: {e.response.text}"
             )
             return False
 
         except httpx.RequestError as e:
-            # This triggers when the server is completely unreachable (no internet, bad URL, etc.)
             self._api_unavailable = True
             print(f"Login failed - API unavailable: {e}")
             if email == "manager@example.com" and password == "Manager123!":
@@ -125,7 +126,6 @@ class AuthService:
             return False
 
         except Exception as e:
-            # This triggers for any other Python bugs in your code
             self._api_unavailable = False
             print(f"Login failed - System error: {e}")
             return False
@@ -141,11 +141,15 @@ class AuthService:
             if not isinstance(data, dict):
                 print(f"Verification failed: unexpected response type {type(data)}")
                 return False
+            response_data = StaffLoginResponse(**data)
+            if not response_data.tokens:
+                print("Verification failed: API returned no tokens.")
+                return False
+            self._store_tokens(
+                response_data.tokens.accessToken, response_data.tokens.refreshToken
+            )
 
-            token_response = TokenResponse(**data)
-            self._store_tokens(token_response.accessToken, token_response.refreshToken)
-
-            claims = self._decode_jwt(token_response.accessToken)
+            claims = self._decode_jwt(response_data.tokens.accessToken)
             self._current_user = {
                 "id": int(claims.get("sub", 0)),
                 "email": claims.get("email", ""),
