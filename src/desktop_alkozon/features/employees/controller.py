@@ -11,6 +11,9 @@ class EmployeesController:
     async def get_employees(self):
         return await self.service.get_employees()
 
+    async def get_all_users(self):
+        return await self.service.get_all_users()
+
     async def create_offer(
         self, title: str, description: str, salary: float | None = None
     ):
@@ -29,6 +32,22 @@ class EmployeesController:
 
     async def terminate(self, user_id: int):
         return await self.service.terminate_employee(user_id)
+
+    async def update_user(self, user_id: int, role: str, active: bool, courier: bool):
+        return await self.service.update_user(user_id, role, active, courier)
+
+    async def create_employee_account(
+        self,
+        email: str,
+        password: str,
+        first_name: str = "",
+        last_name: str = "",
+        courier: bool = False,
+        role: str = "EMPLOYEE",
+    ):
+        return await self.service.create_employee_account(
+            email, password, first_name, last_name, courier, role
+        )
 
     def get_offers_sync(self):
         return self.service.get_offers_sync()

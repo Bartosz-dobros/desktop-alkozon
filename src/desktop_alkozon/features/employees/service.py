@@ -1,3 +1,5 @@
+import jwt
+
 from desktop_alkozon.core.auth import auth_service
 from desktop_alkozon.models.api_models import (
     JobOfferResponse,
@@ -66,6 +68,32 @@ class EmployeesService:
                 ]
             return []
 
+    async def get_all_users(self) -> list[UserAdminResponse]:
+        try:
+            response = await api_client.get("/admin/users")
+            if isinstance(response, list):
+                return [UserAdminResponse(**item) for item in response]
+            return []
+        except Exception:
+            if auth_service.is_demo_mode():
+                return [
+                    UserAdminResponse(
+                        id=101,
+                        email="jan.kowalski@example.com",
+                        role="EMPLOYEE",
+                        active=True,
+                        courier=True,
+                    ),
+                    UserAdminResponse(
+                        id=102,
+                        email="anna.nowak@example.com",
+                        role="EMPLOYEE",
+                        active=True,
+                        courier=False,
+                    ),
+                ]
+            return []
+
     async def post_new_offer(
         self, title: str, description: str, salary: float | None = None
     ) -> JobOfferResponse | None:
@@ -111,6 +139,62 @@ class EmployeesService:
             response = await api_client.post(f"/admin/users/{user_id}/terminate")
             return UserAdminResponse(**response)
         except Exception:
+            return None
+
+    async def update_user(
+        self, user_id: int, role: str, active: bool, courier: bool
+    ) -> UserAdminResponse | None:
+        try:
+            response = await api_client.put(
+                f"/admin/users/{user_id}",
+                {"role": role, "active": active, "courier": courier},
+            )
+            return UserAdminResponse(**response)
+        except Exception:
+            return None
+
+    async def create_employee_account(
+        self,
+        email: str,
+        password: str,
+        first_name: str = "",
+        last_name: str = "",
+        courier: bool = False,
+        role: str = "EMPLOYEE",
+    ) -> UserAdminResponse | None:
+        try:
+            register_data = {
+                "email": email,
+                "password": password,
+                "firstName": first_name,
+                "lastName": last_name,
+                "ageConfirmed": True,
+                "adultConfirmed": True,
+            }
+            register_response = await api_client.post("/auth/register", register_data)
+            if not register_response:
+                return None
+
+            access_token = register_response.get("accessToken", "")
+            if not access_token:
+                return None
+
+            claims = jwt.decode(access_token, options={"verify_signature": False})
+            user_id = int(claims.get("sub", 0))
+            if not user_id:
+                return None
+
+            update_response = await api_client.put(
+                f"/admin/users/{user_id}",
+                {
+                    "role": role,
+                    "active": True,
+                    "courier": courier,
+                },
+            )
+            return UserAdminResponse(**update_response) if update_response else None
+        except Exception as e:
+            print(f"Error creating employee account: {e}")
             return None
 
     def get_offers_sync(self) -> list[JobOfferResponse]:

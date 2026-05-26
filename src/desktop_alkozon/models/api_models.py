@@ -160,6 +160,30 @@ class JobOfferRequest(BaseModel):
     description: str
 
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    firstName: str | None = None
+    lastName: str | None = None
+    ageConfirmed: bool = True
+    adultConfirmed: bool = True
+
+
+class CreateEmployeeRequest(BaseModel):
+    email: str
+    password: str
+    firstName: str | None = None
+    lastName: str | None = None
+    courier: bool = False
+    role: UserRole = UserRole.EMPLOYEE
+
+
+class PatchUserRequest(BaseModel):
+    role: UserRole
+    active: bool
+    courier: bool
+
+
 class InventoryProductRow(BaseModel):
     productId: int
     name: str
