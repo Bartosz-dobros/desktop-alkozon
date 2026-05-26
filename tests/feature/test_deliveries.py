@@ -18,6 +18,11 @@ def test_get_couriers_sync(deliveries_service):
     assert isinstance(couriers, list)
 
 
+def test_get_unassigned_couriers_sync(deliveries_service):
+    couriers = deliveries_service.get_unassigned_couriers_sync()
+    assert isinstance(couriers, list)
+
+
 def test_get_deliveries_sync(deliveries_service):
     deliveries = deliveries_service.get_deliveries_sync()
     assert isinstance(deliveries, list)
@@ -85,3 +90,41 @@ async def test_get_deliveries_async(deliveries_service, mocker):
 
     deliveries = await deliveries_service.get_deliveries()
     assert len(deliveries) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_unassigned_couriers_async(deliveries_service, mocker):
+    mock_users = [
+        {
+            "id": 1,
+            "email": "jan@example.com",
+            "role": "EMPLOYEE",
+            "active": True,
+            "courier": True,
+        },
+        {
+            "id": 2,
+            "email": "anna@example.com",
+            "role": "EMPLOYEE",
+            "active": True,
+            "courier": True,
+        },
+    ]
+    mock_deliveries = [
+        {
+            "id": 101,
+            "orderId": 1001,
+            "courierId": 1,
+            "courierEmail": "jan@example.com",
+            "status": "IN_TRANSIT",
+            "addressSnapshot": "Warszawa",
+        }
+    ]
+    mocker.patch(
+        "desktop_alkozon.features.deliveries.service.api_client.get",
+        side_effect=[mock_users, mock_deliveries],
+    )
+
+    result = await deliveries_service.get_unassigned_couriers()
+    assert len(result) == 1
+    assert result[0]["id"] == 2

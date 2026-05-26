@@ -30,17 +30,43 @@ class DeliveriesService:
                         "id": 2,
                         "email": "anna.nowak@example.com",
                         "active": True,
+                        "courier": True,
+                    },
+                    {
+                        "id": 3,
+                        "email": "piotr.zielinski@example.com",
+                        "active": True,
                         "courier": False,
+                    },
+                ]
+            return []
+
+    async def get_unassigned_couriers(self) -> list[dict]:
+        try:
+            couriers = await self.get_couriers()
+            deliveries = await self.get_deliveries()
+            assigned_ids = {d.courierId for d in deliveries if d.courierId is not None}
+            return [c for c in couriers if c.get("id") not in assigned_ids]
+        except Exception:
+            if auth_service.is_demo_mode():
+                return [
+                    {
+                        "id": 2,
+                        "email": "anna.nowak@example.com",
+                        "active": True,
+                        "courier": True,
                     },
                 ]
             return []
 
     async def get_deliveries(self, status: str | None = None) -> list[DeliveryResponse]:
         try:
-            params = {"status": status} if status else None
-            response = await api_client.get("/deliveries", params)
+            response = await api_client.get("/deliveries")
             if isinstance(response, list):
-                return [DeliveryResponse(**item) for item in response]
+                items = [DeliveryResponse(**item) for item in response]
+                if status:
+                    return [d for d in items if d.status.value == status]
+                return items
             return []
         except Exception:
             if auth_service.is_demo_mode():
@@ -48,10 +74,19 @@ class DeliveriesService:
                     DeliveryResponse(
                         id=101,
                         orderId=1001,
+                        courierId=1,
                         courierEmail="jan.kowalski@example.com",
-                        status="IN_TRANSIT",
+                        status="PENDING",
                         addressSnapshot="Warszawa Centrum",
-                    )
+                    ),
+                    DeliveryResponse(
+                        id=102,
+                        orderId=1002,
+                        courierId=None,
+                        courierEmail=None,
+                        status="PENDING",
+                        addressSnapshot="Krakow Rynek",
+                    ),
                 ]
             return []
 
@@ -100,8 +135,8 @@ class DeliveriesService:
     def get_couriers_sync(self) -> list[dict]:
         return []
 
-    def get_deliveries_sync(self) -> list[DeliveryResponse]:
+    def get_unassigned_couriers_sync(self) -> list[dict]:
         return []
 
-    def get_announcements_sync(self) -> list[DeliveryAnnouncementResponse]:
+    def get_deliveries_sync(self) -> list[DeliveryResponse]:
         return []

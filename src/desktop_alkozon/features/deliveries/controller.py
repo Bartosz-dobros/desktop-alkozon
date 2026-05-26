@@ -8,6 +8,9 @@ class DeliveriesController:
     async def get_couriers(self):
         return await self.service.get_couriers()
 
+    async def get_unassigned_couriers(self):
+        return await self.service.get_unassigned_couriers()
+
     async def get_deliveries(self, status: str | None = None):
         return await self.service.get_deliveries(status)
 
@@ -25,6 +28,9 @@ class DeliveriesController:
 
     def get_couriers_sync(self):
         return self.service.get_couriers_sync()
+
+    def get_unassigned_couriers_sync(self):
+        return self.service.get_unassigned_couriers_sync()
 
     def get_deliveries_sync(self):
         return self.service.get_deliveries_sync()
