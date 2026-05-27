@@ -10,6 +10,12 @@ from desktop_alkozon.ui.pages.login_page import (
 )
 
 
+def _get_content_controls(view):
+    if hasattr(view, "content"):
+        return view.content.controls
+    return view.controls[0].content.controls
+
+
 class TestLoginPageView:
     @pytest.fixture
     def mock_page(self):
@@ -33,34 +39,31 @@ class TestLoginPageView:
     def test_create_login_page_returns_container(self, mock_page):
         view = create_login_page_view(mock_page)
         assert view is not None
-        assert hasattr(view, "content")
+        assert hasattr(view, "controls")
 
     def test_login_page_has_username_field(self, mock_page):
         view = create_login_page_view(mock_page)
-        assert hasattr(view.content, "controls")
-        controls = view.content.controls
-        assert any(
-            hasattr(c, "label") and c.label == "Username / Email" for c in controls
-        )
+        controls = _get_content_controls(view)
+        assert any(hasattr(c, "label") and "użytkownika" in c.label for c in controls)
 
     def test_login_page_has_password_field(self, mock_page):
         view = create_login_page_view(mock_page)
-        controls = view.content.controls
-        assert any(hasattr(c, "label") and c.label == "Password" for c in controls)
+        controls = _get_content_controls(view)
+        assert any(hasattr(c, "label") and "Hasło" in c.label for c in controls)
 
     def test_login_page_has_login_button(self, mock_page):
         view = create_login_page_view(mock_page)
-        controls = view.content.controls
+        controls = _get_content_controls(view)
         assert any(
             hasattr(c, "content")
             and hasattr(c.content, "value")
-            and c.content.value == "LOGIN"
+            and c.content.value == "ZALOGUJ"
             for c in controls
         )
 
     def test_login_page_has_forgot_password_button(self, mock_page):
         view = create_login_page_view(mock_page)
-        controls = view.content.controls
+        controls = _get_content_controls(view)
         assert any(hasattr(c, "on_click") for c in controls)
 
     # Demo mode button test removed as unnecessary
@@ -94,11 +97,11 @@ class TestMainMenuView:
     def test_create_main_menu_returns_container(self, mock_page):
         view = create_main_menu_view(mock_page)
         assert view is not None
-        assert hasattr(view, "content")
+        assert hasattr(view, "controls")
 
     def test_main_menu_shows_user_name(self, mock_page):
         view = create_main_menu_view(mock_page)
-        controls = view.content.controls
+        controls = _get_content_controls(view)
         user_text = [
             c for c in controls if hasattr(c, "value") and "Zalogowany" in c.value
         ]
@@ -106,13 +109,13 @@ class TestMainMenuView:
 
     def test_main_menu_has_warehouse_button(self, mock_page):
         view = create_main_menu_view(mock_page)
-        controls = view.content.controls
+        controls = _get_content_controls(view)
         buttons = [c for c in controls if hasattr(c, "on_click")]
         assert len(buttons) >= 3
 
     def test_main_menu_has_logout_button(self, mock_page):
         view = create_main_menu_view(mock_page)
-        controls = view.content.controls
+        controls = _get_content_controls(view)
         logout_buttons = [
             c for c in controls if hasattr(c, "icon") and c.icon == ft.Icons.LOGOUT
         ]
@@ -139,15 +142,15 @@ class TestLoginPageWithMockAuth:
 
     def test_login_page_verification_field_exists(self, mock_page):
         view = create_login_page_view(mock_page)
-        controls = view.content.controls
+        controls = _get_content_controls(view)
         verification_fields = [
-            c for c in controls if hasattr(c, "label") and "Verification" in c.label
+            c for c in controls if hasattr(c, "label") and "weryfikacyjny" in c.label
         ]
         assert len(verification_fields) > 0
 
     def test_login_page_status_text_exists(self, mock_page):
         view = create_login_page_view(mock_page)
-        controls = view.content.controls
+        controls = _get_content_controls(view)
         status_fields = [
             c for c in controls if hasattr(c, "color") and c.color == ft.Colors.RED
         ]

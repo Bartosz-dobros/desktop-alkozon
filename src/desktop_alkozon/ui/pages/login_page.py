@@ -2,15 +2,26 @@ import flet as ft
 
 from desktop_alkozon.config import is_demo_mode_enabled
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.core.i18n import i18n
+from desktop_alkozon.ui.components.settings_drawer import (
+    make_hamburger_button,
+    make_settings_drawer,
+    setup_theme,
+)
 
 
 def create_login_page_view(page: ft.Page) -> ft.Container:
+    page._rebuild_view = lambda: create_login_page_view(page)
+
+    setup_theme(page)
+    page.drawer = make_settings_drawer(page)
+
     loading = [False]
     verification_required = [False]
     challenge_id = [None]
 
     username_field = ft.TextField(
-        label="Username / Email",
+        label=i18n.t("login.username"),
         width=400,
         border_radius=8,
         prefix_icon=ft.Icons.PERSON,
@@ -18,7 +29,7 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         text_size=16,
     )
     password_field = ft.TextField(
-        label="Password",
+        label=i18n.t("login.password"),
         password=True,
         can_reveal_password=True,
         width=400,
@@ -28,7 +39,7 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         text_size=16,
     )
     verification_field = ft.TextField(
-        label="Verification Code (4 digits)",
+        label=i18n.t("login.verification_code"),
         width=400,
         border_radius=8,
         visible=False,
@@ -38,7 +49,7 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         text_size=16,
     )
     login_button = ft.ElevatedButton(
-        content=ft.Text("LOGIN"),
+        content=ft.Text(i18n.t("login.button")),
         width=400,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
     )
@@ -50,7 +61,7 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
 
         loading[0] = True
         login_button.disabled = True
-        login_button.content = ft.Text("LOGGING IN...")
+        login_button.content = ft.Text(i18n.t("login.logging_in"))
         status_text.visible = False
         page.update()
 
@@ -66,8 +77,8 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
                 verification_field.visible = True
                 loading[0] = False
                 login_button.disabled = False
-                login_button.content = ft.Text("ENTER CODE")
-                status_text.value = "Verification code sent to your email"
+                login_button.content = ft.Text(i18n.t("login.enter_code"))
+                status_text.value = i18n.t("login.verification_sent")
                 status_text.visible = True
                 page.update()
                 return
@@ -96,21 +107,17 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
 
         loading[0] = False
         login_button.disabled = False
-        login_button.content = ft.Text("LOGIN")
+        login_button.content = ft.Text(i18n.t("login.button"))
         if auth_service.is_api_unavailable():
-            status_text.value = (
-                "Cannot connect to server. Please check your connection."
-            )
+            status_text.value = i18n.t("login.connection_error")
             status_text.visible = True
         elif auth_service.is_locked():
-            status_text.value = "Account locked. Restart the app."
+            status_text.value = i18n.t("login.account_locked")
             status_text.visible = True
             login_button.disabled = True
         else:
             remaining = max(0, 5 - auth_service.attempts)
-            status_text.value = (
-                f"Invalid credentials or 2FA code. Attempts left: {remaining}"
-            )
+            status_text.value = i18n.t("login.invalid_credentials", remaining=remaining)
             status_text.visible = True
 
         page.update()
@@ -123,40 +130,58 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
 
     login_button.on_click = login_clicked
 
-    controls = [
+    inner_controls = [
         ft.Text("AlkozOn Desktop", size=32, weight=ft.FontWeight.BOLD),
-        ft.Text("Log in to access warehouse, deliveries & employees", size=16),
+        ft.Text(i18n.t("login.subtitle"), size=16),
         ft.Divider(),
         username_field,
         password_field,
         verification_field,
         status_text,
         login_button,
-        ft.TextButton("Forgot password?", on_click=lambda e: print("TODO: reset")),
+        ft.TextButton(
+            i18n.t("login.forgot_password"),
+            on_click=lambda e: print("TODO: reset"),
+        ),
     ]
 
     if is_demo_mode_enabled():
-        controls.append(
+        inner_controls.append(
             ft.ElevatedButton(
-                "Demo Mode",
+                i18n.t("login.demo_mode"),
                 width=400,
                 on_click=lambda e: page.run_task(enter_demo_mode, page),
                 style=ft.ButtonStyle(bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE),
             )
         )
 
-    return ft.Container(
-        padding=40,
-        alignment=ft.Alignment(0.5, 0.5),
-        content=ft.Column(
-            controls=controls,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=20,
-        ),
+    return ft.Stack(
+        controls=[
+            ft.Container(
+                expand=True,
+                padding=40,
+                alignment=ft.Alignment(0.5, 0.5),
+                content=ft.Column(
+                    controls=inner_controls,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=20,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            ),
+            ft.Container(
+                content=make_hamburger_button(page),
+                left=12,
+                top=12,
+            ),
+        ],
+        expand=True,
     )
 
 
 def create_main_menu_view(page: ft.Page) -> ft.Container:
+    page._rebuild_view = lambda: create_main_menu_view(page)
+    page.drawer = make_settings_drawer(page)
+
     user = auth_service.get_current_user()
     user_name = (
         (user.get("firstName", "") + " " + user.get("lastName", "")).strip()
@@ -192,47 +217,70 @@ def create_main_menu_view(page: ft.Page) -> ft.Container:
         page.add(create_login_page_view(page))
         page.update()
 
-    return ft.Container(
-        padding=40,
-        alignment=ft.Alignment(0.5, 0.5),
-        content=ft.Column(
-            controls=[
-                ft.Text("AlkozOn Desktop", size=32, weight=ft.FontWeight.BOLD),
-                ft.Text(f"Zalogowany jako: {user_name}", size=16),
-                ft.Text(user_email, size=12, color=ft.Colors.GREY_400),
-                ft.Divider(),
-                ft.ElevatedButton(
-                    "Stan magazynu i zamówienia",
-                    width=500,
-                    height=60,
-                    on_click=go_to_warehouse,
+    return ft.Stack(
+        controls=[
+            ft.Container(
+                expand=True,
+                padding=40,
+                content=ft.Column(
+                    expand=True,
+                    controls=[
+                        ft.Text(
+                            "AlkozOn Desktop",
+                            size=32,
+                            weight=ft.FontWeight.BOLD,
+                        ),
+                        ft.Text(
+                            i18n.t("menu.logged_in_as", name=user_name),
+                            size=16,
+                        ),
+                        ft.Text(
+                            user_email,
+                            size=12,
+                            color=ft.Colors.GREY_400,
+                        ),
+                        ft.Divider(),
+                        ft.ElevatedButton(
+                            i18n.t("menu.warehouse"),
+                            width=500,
+                            height=60,
+                            on_click=go_to_warehouse,
+                        ),
+                        ft.ElevatedButton(
+                            i18n.t("menu.deliveries"),
+                            width=500,
+                            height=60,
+                            on_click=go_to_deliveries,
+                        ),
+                        ft.ElevatedButton(
+                            i18n.t("menu.employees"),
+                            width=500,
+                            height=60,
+                            on_click=go_to_employees,
+                        ),
+                        ft.Divider(),
+                        ft.ElevatedButton(
+                            i18n.t("menu.logout"),
+                            width=500,
+                            height=50,
+                            icon=ft.Icons.LOGOUT,
+                            on_click=logout,
+                            style=ft.ButtonStyle(
+                                bgcolor=ft.Colors.RED_700,
+                                color=ft.Colors.WHITE,
+                            ),
+                        ),
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=15,
+                    scroll=ft.ScrollMode.AUTO,
                 ),
-                ft.ElevatedButton(
-                    "Kurierzy i dostawy",
-                    width=500,
-                    height=60,
-                    on_click=go_to_deliveries,
-                ),
-                ft.ElevatedButton(
-                    "Pracownicy i oferty pracy",
-                    width=500,
-                    height=60,
-                    on_click=go_to_employees,
-                ),
-                ft.Divider(),
-                ft.ElevatedButton(
-                    "Wyloguj się",
-                    width=500,
-                    height=50,
-                    icon=ft.Icons.LOGOUT,
-                    on_click=logout,
-                    style=ft.ButtonStyle(
-                        bgcolor=ft.Colors.RED_700,
-                        color=ft.Colors.WHITE,
-                    ),
-                ),
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=15,
-        ),
+            ),
+            ft.Container(
+                content=make_hamburger_button(page),
+                left=12,
+                top=12,
+            ),
+        ],
+        expand=True,
     )

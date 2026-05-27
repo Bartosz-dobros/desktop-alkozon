@@ -1,10 +1,13 @@
 import flet as ft
 
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.core.i18n import i18n
 from desktop_alkozon.features.employees.controller import EmployeesController
 
 
 def create_employees_view(page: ft.Page) -> ft.Container:
+    page._rebuild_view = lambda: create_employees_view(page)
+
     def go_to_employee_list(e):
         auth_service.update_activity()
         page.clean()
@@ -25,46 +28,53 @@ def create_employees_view(page: ft.Page) -> ft.Container:
         page.update()
 
     content = ft.Column(
+        expand=True,
         controls=[
-            ft.Text("Pracownicy i oferty pracy", size=24, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                i18n.t("employees.title"),
+                size=24,
+                weight=ft.FontWeight.BOLD,
+            ),
             ft.Divider(),
             ft.ElevatedButton(
-                "Lista pracownikow",
+                i18n.t("employees.list_button"),
                 width=500,
                 height=60,
                 on_click=go_to_employee_list,
             ),
             ft.ElevatedButton(
-                "Oferty pracy",
+                i18n.t("employees.offers_button"),
                 width=500,
                 height=60,
                 on_click=go_to_job_offers,
             ),
             ft.Divider(),
             ft.ElevatedButton(
-                "Powrot do menu glownego",
+                i18n.t("employees.back"),
                 width=400,
                 on_click=go_to_menu,
             ),
         ],
         spacing=15,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        scroll=ft.ScrollMode.AUTO,
     )
 
     return ft.Container(
+        expand=True,
         padding=20,
-        alignment=ft.Alignment(0.5, 0.5),
         content=content,
     )
 
 
-def _make_group_section(label: str) -> dict:
+def _make_group_section(label_key: str) -> dict:
+    label = i18n.t(label_key)
     table = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("ID")),
-            ft.DataColumn(ft.Text("Email")),
-            ft.DataColumn(ft.Text("Status")),
-            ft.DataColumn(ft.Text("Kurier")),
+            ft.DataColumn(ft.Text(i18n.t("employees.email"))),
+            ft.DataColumn(ft.Text(i18n.t("employees.status"))),
+            ft.DataColumn(ft.Text(i18n.t("employees.courier"))),
         ],
         rows=[],
     )
@@ -83,56 +93,59 @@ def _make_group_section(label: str) -> dict:
         "table": table,
         "count_text": count_text,
         "label": label,
+        "label_key": label_key,
     }
 
 
 def create_employee_list_view(page: ft.Page) -> ft.Container:
+    page._rebuild_view = lambda: create_employee_list_view(page)
+
     controller = EmployeesController()
     employees = []
 
-    mgr = _make_group_section("Managerowie")
-    emp = _make_group_section("Pracownicy")
-    cou = _make_group_section("Kurierzy")
+    mgr = _make_group_section("employees.managers")
+    emp = _make_group_section("employees.employees")
+    cou = _make_group_section("employees.couriers")
 
     loading = ft.ProgressRing(visible=False)
 
     email_field = ft.TextField(
-        label="Email",
+        label=i18n.t("employees.email"),
         width=300,
         keyboard_type=ft.KeyboardType.EMAIL,
         max_length=100,
     )
     password_field = ft.TextField(
-        label="Haslo",
+        label=i18n.t("employees.password"),
         password=True,
         can_reveal_password=True,
         width=300,
         max_length=128,
     )
     confirm_password_field = ft.TextField(
-        label="Potwierdz haslo",
+        label=i18n.t("employees.confirm_password"),
         password=True,
         can_reveal_password=True,
         width=300,
         max_length=128,
     )
     first_name_field = ft.TextField(
-        label="Imie (opcjonalnie)",
+        label=i18n.t("employees.first_name"),
         width=300,
         max_length=50,
     )
     last_name_field = ft.TextField(
-        label="Nazwisko (opcjonalnie)",
+        label=i18n.t("employees.last_name"),
         width=300,
         max_length=50,
     )
-    courier_switch = ft.Switch(label="Kurier", value=False)
+    courier_switch = ft.Switch(label=i18n.t("employees.courier"), value=False)
     role_dropdown = ft.Dropdown(
-        label="Rola",
+        label=i18n.t("employees.role"),
         width=300,
         options=[
-            ft.dropdown.Option("EMPLOYEE", "Pracownik"),
-            ft.dropdown.Option("MANAGER", "Manager"),
+            ft.dropdown.Option("EMPLOYEE", i18n.t("employees.role_employee")),
+            ft.dropdown.Option("MANAGER", i18n.t("employees.role_manager")),
         ],
         value="EMPLOYEE",
     )
@@ -140,9 +153,16 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
     def refresh_groups():
         def fill_group(info, subset):
             info["table"].rows.clear()
+            count_label = i18n.t(info["label_key"])
             for e in subset:
-                status_str = "Aktywny" if e.active else "Nieaktywny"
-                courier_str = "Tak" if e.courier else "Nie"
+                status_str = (
+                    i18n.t("employees.active")
+                    if e.active
+                    else i18n.t("employees.inactive")
+                )
+                courier_str = (
+                    i18n.t("employees.yes") if e.courier else i18n.t("employees.no")
+                )
                 info["table"].rows.append(
                     ft.DataRow(
                         cells=[
@@ -153,7 +173,7 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
                         ]
                     )
                 )
-            info["count_text"].value = f"{len(subset)} {info['label'].lower()}"
+            info["count_text"].value = f"{len(subset)} {count_label.lower()}"
 
         managers = [e for e in employees if e.role == "MANAGER"]
         regular = [e for e in employees if e.role == "EMPLOYEE" and not e.courier]
@@ -201,7 +221,7 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
             employees = controller.get_employees_sync() or []
             refresh_groups()
             loading.visible = False
-            show_error("Nie udalo sie zaladowac listy pracownikow.")
+            show_error(i18n.t("employees.load_error"))
 
     async def create_employee_async():
         nonlocal employees
@@ -215,13 +235,13 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
         role = role_dropdown.value
 
         if not email:
-            show_error("Email jest wymagany.")
+            show_error(i18n.t("employees.email_required"))
             return
         if not password or len(password) < 8:
-            show_error("Haslo musi miec co najmniej 8 znakow.")
+            show_error(i18n.t("employees.password_length"))
             return
         if password != confirm:
-            show_error("Hasla nie sa zgodne.")
+            show_error(i18n.t("employees.password_mismatch"))
             return
 
         try:
@@ -232,10 +252,7 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
                 email, password, first_name, last_name, courier, role
             )
             if result:
-                show_success(
-                    f"Konto pracownika utworzone: {result.email}. "
-                    "Kod 2FA zostanie wyslany przy pierwszym logowaniu."
-                )
+                show_success(i18n.t("employees.account_created", email=result.email))
                 email_field.value = ""
                 password_field.value = ""
                 confirm_password_field.value = ""
@@ -246,14 +263,14 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
                 employees = await controller.get_employees() or []
                 refresh_groups()
             else:
-                show_error("Nie udalo sie utworzyc konta pracownika.")
+                show_error(i18n.t("employees.create_failed"))
 
             loading.visible = False
             page.update()
         except Exception as e:
             print(f"Error creating employee: {e}")
             loading.visible = False
-            show_error("Blad podczas tworzenia konta pracownika.")
+            show_error(i18n.t("employees.create_error"))
 
     def create_employee_clicked(e):
         auth_service.update_activity()
@@ -266,14 +283,23 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
         page.update()
 
     content = ft.Column(
+        expand=True,
         controls=[
-            ft.Text("Lista pracownikow", size=24, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                i18n.t("employees.list_title"),
+                size=24,
+                weight=ft.FontWeight.BOLD,
+            ),
             ft.Row([loading]),
             mgr["section"],
             emp["section"],
             cou["section"],
             ft.Divider(),
-            ft.Text("Dodaj nowego pracownika", size=18, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                i18n.t("employees.add_title"),
+                size=18,
+                weight=ft.FontWeight.BOLD,
+            ),
             email_field,
             password_field,
             confirm_password_field,
@@ -282,11 +308,12 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
             role_dropdown,
             courier_switch,
             ft.ElevatedButton(
-                "Utworz konto pracownika", on_click=create_employee_clicked
+                i18n.t("employees.create_button"),
+                on_click=create_employee_clicked,
             ),
             ft.Divider(),
             ft.ElevatedButton(
-                "Powrot do menu pracownikow",
+                i18n.t("employees.back_to_hub"),
                 width=400,
                 on_click=go_back,
             ),
@@ -298,6 +325,7 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
     page.run_task(load_employees)
 
     container = ft.Container(
+        expand=True,
         padding=20,
         content=content,
     )
@@ -305,44 +333,56 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
     return container
 
 
+def _make_offer_section(label_key: str, show_actions: bool = False) -> dict:
+    label = i18n.t(label_key)
+    cols = [
+        ft.DataColumn(ft.Text(i18n.t("offers.table.id"))),
+        ft.DataColumn(ft.Text(i18n.t("offers.table.title"))),
+        ft.DataColumn(ft.Text(i18n.t("offers.table.description"))),
+    ]
+    if show_actions:
+        cols.append(ft.DataColumn(ft.Text(i18n.t("offers.table.actions"))))
+    table = ft.DataTable(columns=cols, rows=[])
+    count = ft.Text(f"0 {label.lower()}", size=12, color=ft.Colors.GREY_400)
+    section = ft.Column(
+        controls=[
+            ft.Row(
+                controls=[
+                    ft.Text(label, size=16, weight=ft.FontWeight.BOLD),
+                    count,
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            table,
+            ft.Divider(height=1),
+        ],
+        spacing=4,
+    )
+    return {
+        "table": table,
+        "count": count,
+        "section": section,
+        "label": label,
+        "label_key": label_key,
+    }
+
+
 def create_job_offers_view(page: ft.Page) -> ft.Container:
+    page._rebuild_view = lambda: create_job_offers_view(page)
+
     controller = EmployeesController()
     offers = []
 
-    def _make_offer_section(label: str, show_actions: bool = False) -> dict:
-        cols = [
-            ft.DataColumn(ft.Text("ID")),
-            ft.DataColumn(ft.Text("Oferta")),
-            ft.DataColumn(ft.Text("Opis")),
-        ]
-        if show_actions:
-            cols.append(ft.DataColumn(ft.Text("Akcje")))
-        table = ft.DataTable(columns=cols, rows=[])
-        count = ft.Text(f"0 {label.lower()}", size=12, color=ft.Colors.GREY_400)
-        section = ft.Column(
-            controls=[
-                ft.Row(
-                    controls=[
-                        ft.Text(label, size=16, weight=ft.FontWeight.BOLD),
-                        count,
-                    ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                ),
-                table,
-                ft.Divider(height=1),
-            ],
-            spacing=4,
-        )
-        return {"table": table, "count": count, "section": section, "label": label}
-
-    open_group = _make_offer_section("Otwarte", show_actions=True)
-    closed_group = _make_offer_section("Zamkniete")
+    open_group = _make_offer_section("offers.open", show_actions=True)
+    closed_group = _make_offer_section("offers.closed")
 
     loading = ft.ProgressRing(visible=False)
 
-    title_field = ft.TextField(label="Tytul oferty", width=300, max_length=100)
+    title_field = ft.TextField(
+        label=i18n.t("offers.title_field"), width=300, max_length=100
+    )
     description_field = ft.TextField(
-        label="Opis oferty",
+        label=i18n.t("offers.description_field"),
         width=400,
         max_length=500,
         multiline=True,
@@ -352,6 +392,7 @@ def create_job_offers_view(page: ft.Page) -> ft.Container:
     def refresh_sections():
         def fill(info, subset, with_actions=False):
             info["table"].rows.clear()
+            count_label = i18n.t(info["label_key"])
             for o in subset:
                 desc = o.description or ""
                 cells = [
@@ -363,14 +404,14 @@ def create_job_offers_view(page: ft.Page) -> ft.Container:
                     close_btn = ft.IconButton(
                         icon=ft.Icons.CLOSE,
                         icon_size=18,
-                        tooltip="Zamknij oferte",
+                        tooltip=i18n.t("offers.close_tooltip"),
                         on_click=lambda _, oid=o.id: page.run_task(
                             close_offer_async, oid
                         ),
                     )
                     cells.append(ft.DataCell(close_btn))
                 info["table"].rows.append(ft.DataRow(cells=cells))
-            info["count"].value = f"{len(subset)} {info['label'].lower()}"
+            info["count"].value = f"{len(subset)} {count_label.lower()}"
 
         open_list = [
             o for o in offers if str(getattr(o.status, "value", o.status)) == "OPEN"
@@ -420,7 +461,7 @@ def create_job_offers_view(page: ft.Page) -> ft.Container:
             offers = controller.get_offers_sync() or []
             refresh_sections()
             loading.visible = False
-            show_error("Nie udalo sie zaladowac ofert pracy.")
+            show_error(i18n.t("offers.load_error"))
 
     async def close_offer_async(offer_id: int):
         try:
@@ -429,9 +470,9 @@ def create_job_offers_view(page: ft.Page) -> ft.Container:
 
             result = await controller.update_offer(offer_id, "", "", "CLOSED")
             if result:
-                show_success("Oferta zamknieta")
+                show_success(i18n.t("offers.close_success"))
             else:
-                show_error("Nie udalo sie zamknac oferty")
+                show_error(i18n.t("offers.close_failed"))
 
             await load_offers()
 
@@ -440,20 +481,20 @@ def create_job_offers_view(page: ft.Page) -> ft.Container:
         except Exception as e:
             print(f"Error closing offer: {e}")
             loading.visible = False
-            show_error("Blad podczas zamykania oferty")
+            show_error(i18n.t("offers.close_error"))
 
     async def create_offer_async(title, description):
         result = await controller.create_offer(title, description)
         if result:
-            show_success("Nowa oferta wystawiona")
+            show_success(i18n.t("offers.create_success"))
         else:
-            show_error("Nie udalo sie wystawic oferty")
+            show_error(i18n.t("offers.create_failed"))
         await load_offers()
 
     def post_offer_clicked(e):
         auth_service.update_activity()
         if not title_field.value or not title_field.value.strip():
-            show_error("Wypelnij tytul oferty")
+            show_error(i18n.t("offers.title_required"))
             return
 
         page.run_task(
@@ -473,17 +514,28 @@ def create_job_offers_view(page: ft.Page) -> ft.Container:
 
     form = ft.Column(
         controls=[
-            ft.Text("Nowa oferta pracy", size=16, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                i18n.t("offers.new_title"),
+                size=16,
+                weight=ft.FontWeight.BOLD,
+            ),
             title_field,
             description_field,
-            ft.ElevatedButton("Wystaw nowa oferte", on_click=post_offer_clicked),
+            ft.ElevatedButton(
+                i18n.t("offers.post_button"), on_click=post_offer_clicked
+            ),
         ],
         spacing=10,
     )
 
     content = ft.Column(
+        expand=True,
         controls=[
-            ft.Text("Oferty pracy", size=24, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                i18n.t("employees.offers_title"),
+                size=24,
+                weight=ft.FontWeight.BOLD,
+            ),
             loading,
             open_group["section"],
             closed_group["section"],
@@ -491,7 +543,7 @@ def create_job_offers_view(page: ft.Page) -> ft.Container:
             form,
             ft.Divider(),
             ft.ElevatedButton(
-                "Powrot do menu pracownikow",
+                i18n.t("employees.back_to_hub"),
                 width=400,
                 on_click=go_back,
             ),
@@ -503,6 +555,7 @@ def create_job_offers_view(page: ft.Page) -> ft.Container:
     page.run_task(load_offers)
 
     container = ft.Container(
+        expand=True,
         padding=20,
         content=content,
     )

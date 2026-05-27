@@ -26,8 +26,13 @@ class TestLoginPage:
 
     def test_login_page_creates_view(self, login_view):
         assert login_view is not None
-        assert isinstance(login_view, MagicMock) or hasattr(login_view, "content")
+        assert isinstance(login_view, MagicMock) or hasattr(login_view, "controls")
 
     def test_login_page_has_controls(self, login_view):
-        if hasattr(login_view, "content") and hasattr(login_view.content, "controls"):
-            assert len(login_view.content.controls) > 0
+        controls = (
+            login_view.content.controls
+            if hasattr(login_view, "content")
+            and hasattr(login_view.content, "controls")
+            else login_view.controls
+        )
+        assert len(controls) > 0

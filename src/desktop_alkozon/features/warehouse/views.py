@@ -1,40 +1,43 @@
 import flet as ft
 
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.core.i18n import i18n
 from desktop_alkozon.features.warehouse.controller import WarehouseController
 
 
 def create_warehouse_view(page: ft.Page) -> ft.Container:
+    page._rebuild_view = lambda: create_warehouse_view(page)
+
     controller = WarehouseController()
     items = []
 
     table = ft.DataTable(
         columns=[
-            ft.DataColumn(ft.Text("ID")),
-            ft.DataColumn(ft.Text("Nazwa towaru")),
-            ft.DataColumn(ft.Text("Ilosc")),
-            ft.DataColumn(ft.Text("Strefa")),
+            ft.DataColumn(ft.Text(i18n.t("warehouse.table.id"))),
+            ft.DataColumn(ft.Text(i18n.t("warehouse.table.name"))),
+            ft.DataColumn(ft.Text(i18n.t("warehouse.table.quantity"))),
+            ft.DataColumn(ft.Text(i18n.t("warehouse.table.zone"))),
         ],
         rows=[],
     )
     table_loading = ft.ProgressRing(visible=False)
 
     product_id_field = ft.TextField(
-        label="ID produktu",
+        label=i18n.t("warehouse.product_id"),
         width=120,
         input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$"),
         keyboard_type=ft.KeyboardType.NUMBER,
         text_size=14,
     )
     quantity_field = ft.TextField(
-        label="Ilosc",
+        label=i18n.t("warehouse.quantity"),
         width=150,
         input_filter=ft.InputFilter(allow=True, regex_string=r"^-?[0-9]*$"),
         keyboard_type=ft.KeyboardType.NUMBER,
         text_size=14,
     )
     note_field = ft.TextField(
-        label="Notatka (opcjonalnie)",
+        label=i18n.t("warehouse.note"),
         width=300,
         max_length=200,
         text_size=14,
@@ -45,7 +48,7 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
     def refresh_table():
         table.rows.clear()
         if not items:
-            product_count_text.value = "0 produktow"
+            product_count_text.value = i18n.t("warehouse.count", count=0)
             return
         for item in items:
             table.rows.append(
@@ -60,7 +63,7 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
                     ]
                 )
             )
-        product_count_text.value = f"{len(items)} produktow"
+        product_count_text.value = i18n.t("warehouse.count", count=len(items))
 
     def show_error(message: str):
         snack = ft.SnackBar(
@@ -99,27 +102,27 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
             items = controller.get_stock_data_sync() or []
             refresh_table()
             table_loading.visible = False
-            show_error("Failed to load warehouse data. Please try again.")
+            show_error(i18n.t("warehouse.load_error"))
 
     async def order_item_async(product_id, quantity_delta, note):
         result = await controller.order_new_item(product_id, quantity_delta, note)
         if result:
-            show_success("Zamowienie zlozone")
+            show_success(i18n.t("warehouse.order_success"))
         else:
-            show_error("Nie udalo sie zlozyc zamowienia")
+            show_error(i18n.t("warehouse.order_fail"))
         await load_data()
 
     def order_item_clicked(e):
         auth_service.update_activity()
         if not product_id_field.value or not quantity_field.value:
-            show_error("Podaj ID produktu i zmiane ilosci")
+            show_error(i18n.t("warehouse.enter_product_id"))
             return
 
         try:
             product_id = int(product_id_field.value)
             quantity_delta = int(quantity_field.value)
         except ValueError:
-            show_error("ID produktu i zmiana ilosci musza byc liczbami")
+            show_error(i18n.t("warehouse.invalid_input"))
             return
 
         page.run_task(
@@ -140,34 +143,40 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
         page.add(create_main_menu_view(page))
         page.update()
 
-    # (no code)  # table_wrapper removed
-
     form = ft.Row(
         controls=[
             product_id_field,
             quantity_field,
             note_field,
-            ft.ElevatedButton("Zamow towar", on_click=order_item_clicked),
+            ft.ElevatedButton(
+                i18n.t("warehouse.order_button"), on_click=order_item_clicked
+            ),
         ],
         spacing=10,
     )
 
-    # Expose table and fields directly for UI tests
     content = ft.Column(
+        expand=True,
         controls=[
-            ft.Text("Stan magazynu", size=24, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                i18n.t("warehouse.title"),
+                size=24,
+                weight=ft.FontWeight.BOLD,
+            ),
             ft.Row([table_loading, product_count_text]),
-            # expose the data table
             table,
             ft.Divider(),
-            ft.Text("Zamow nowy towar", size=18, weight=ft.FontWeight.BOLD),
-            # expose fields directly
+            ft.Text(
+                i18n.t("warehouse.new_order_title"),
+                size=18,
+                weight=ft.FontWeight.BOLD,
+            ),
             product_id_field,
             quantity_field,
             note_field,
             form,
             ft.ElevatedButton(
-                "Powrot do menu glownego",
+                i18n.t("warehouse.back"),
                 width=400,
                 on_click=go_to_menu,
             ),
@@ -179,9 +188,9 @@ def create_warehouse_view(page: ft.Page) -> ft.Container:
     page.run_task(load_data)
 
     container = ft.Container(
+        expand=True,
         padding=20,
         content=content,
     )
-    # Expose controls directly for tests that access view.controls
-    container.controls = content.controls  # type: ignore[attr-defined]
+    container.controls = content.controls
     return container

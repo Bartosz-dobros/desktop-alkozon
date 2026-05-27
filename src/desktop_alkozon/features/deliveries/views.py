@@ -1,10 +1,13 @@
 import flet as ft
 
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.core.i18n import i18n
 from desktop_alkozon.features.deliveries.controller import DeliveriesController
 
 
 def create_deliveries_view(page: ft.Page) -> ft.Container:
+    page._rebuild_view = lambda: create_deliveries_view(page)
+
     controller = DeliveriesController()
     deliveries = []
     unassigned_couriers = []
@@ -12,26 +15,26 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
 
     deliveries_table = ft.DataTable(
         columns=[
-            ft.DataColumn(ft.Text("ID")),
-            ft.DataColumn(ft.Text("Zamowienie")),
-            ft.DataColumn(ft.Text("Adres")),
-            ft.DataColumn(ft.Text("Status")),
-            ft.DataColumn(ft.Text("Wybierz")),
+            ft.DataColumn(ft.Text(i18n.t("deliveries.table.id"))),
+            ft.DataColumn(ft.Text(i18n.t("deliveries.table.order"))),
+            ft.DataColumn(ft.Text(i18n.t("deliveries.table.address"))),
+            ft.DataColumn(ft.Text(i18n.t("deliveries.table.status"))),
+            ft.DataColumn(ft.Text(i18n.t("deliveries.table.select"))),
         ],
         rows=[],
     )
 
     couriers_table = ft.DataTable(
         columns=[
-            ft.DataColumn(ft.Text("ID")),
-            ft.DataColumn(ft.Text("Email")),
-            ft.DataColumn(ft.Text("Akcja")),
+            ft.DataColumn(ft.Text(i18n.t("deliveries.courier_table.id"))),
+            ft.DataColumn(ft.Text(i18n.t("deliveries.courier_table.email"))),
+            ft.DataColumn(ft.Text(i18n.t("deliveries.courier_table.action"))),
         ],
         rows=[],
     )
 
     loading = ft.ProgressRing(visible=False)
-    selected_delivery_text = ft.Text("Zadna dostawa nie jest wybrana", size=14)
+    selected_delivery_text = ft.Text(i18n.t("deliveries.no_selection"), size=14)
 
     def refresh_tables():
         nonlocal deliveries, unassigned_couriers
@@ -71,7 +74,7 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
         if unassigned_couriers:
             for c in unassigned_couriers:
                 assign_btn = ft.ElevatedButton(
-                    "Przypisz",
+                    i18n.t("deliveries.assign_button"),
                     on_click=make_assign_handler(c.get("id")),
                 )
                 couriers_table.rows.append(
@@ -103,7 +106,7 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
     def select_delivery(delivery_id: int):
         nonlocal selected_delivery_id
         selected_delivery_id = delivery_id
-        selected_delivery_text.value = f"Wybrana dostawa: ID {delivery_id}"
+        selected_delivery_text.value = i18n.t("deliveries.selected", id=delivery_id)
         page.update()
 
     async def load_data():
@@ -124,23 +127,23 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
             unassigned_couriers = controller.get_unassigned_couriers_sync() or []
             refresh_tables()
             loading.visible = False
-            show_error("Failed to load deliveries data. Please try again.")
+            show_error(i18n.t("deliveries.load_error"))
 
     async def assign_courier_to_delivery_async(delivery_id: int, courier_id: int):
         result = await controller.assign_courier(delivery_id, courier_id)
         if result:
-            show_success(f"Kurier przypisany do dostawy {delivery_id}")
+            show_success(i18n.t("deliveries.assign_success", delivery_id=delivery_id))
         else:
-            show_error(f"Nie udalo sie przypisac kuriera do dostawy {delivery_id}")
+            show_error(i18n.t("deliveries.assign_failed", delivery_id=delivery_id))
         await load_data()
 
     def assign_courier_to_delivery(delivery_id: int, courier_id: int):
         auth_service.update_activity()
         if delivery_id is None:
-            show_error("Najpierw wybierz dostawe z listy")
+            show_error(i18n.t("deliveries.select_first"))
             return
         if courier_id is None:
-            show_error("Niepoprawny identyfikator kuriera")
+            show_error(i18n.t("deliveries.invalid_courier"))
             return
         page.run_task(assign_courier_to_delivery_async, delivery_id, courier_id)
 
@@ -152,23 +155,34 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
         page.update()
 
     content = ft.Column(
+        expand=True,
         controls=[
-            ft.Text("Kurierzy i stan dostaw", size=24, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                i18n.t("deliveries.title"),
+                size=24,
+                weight=ft.FontWeight.BOLD,
+            ),
             loading,
             ft.Divider(),
-            ft.Text("Oczekujace dostawy", size=18, weight=ft.FontWeight.BOLD),
             ft.Text(
-                "Dostawy o statusie PENDING oczekujace na przypisanie kuriera", size=13
+                i18n.t("deliveries.pending_title"),
+                size=18,
+                weight=ft.FontWeight.BOLD,
             ),
+            ft.Text(i18n.t("deliveries.pending_desc"), size=13),
             deliveries_table,
             ft.Divider(),
-            ft.Text("Dostepni kurierzy", size=18, weight=ft.FontWeight.BOLD),
-            ft.Text("Kurierzy nieprzypisani do zadnej dostawy", size=13),
+            ft.Text(
+                i18n.t("deliveries.available_couriers"),
+                size=18,
+                weight=ft.FontWeight.BOLD,
+            ),
+            ft.Text(i18n.t("deliveries.available_desc"), size=13),
             couriers_table,
             ft.Divider(),
             selected_delivery_text,
             ft.ElevatedButton(
-                "Powrot do menu glownego",
+                i18n.t("deliveries.back"),
                 width=400,
                 on_click=go_to_menu,
             ),
@@ -180,6 +194,7 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
     page.run_task(load_data)
 
     return ft.Container(
+        expand=True,
         padding=20,
         content=content,
     )
