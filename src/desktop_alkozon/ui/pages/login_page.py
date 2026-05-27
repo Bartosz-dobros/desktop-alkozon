@@ -1,3 +1,5 @@
+import asyncio
+
 import flet as ft
 
 from desktop_alkozon.config import is_demo_mode_enabled
@@ -141,7 +143,7 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         login_button,
         ft.TextButton(
             i18n.t("login.forgot_password"),
-            on_click=lambda e: print("TODO: reset"),
+            on_click=lambda e: show_password_reset_dialog(page),
         ),
     ]
 
@@ -176,6 +178,92 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         ],
         expand=True,
     )
+
+
+def show_password_reset_dialog(page: ft.Page):
+    email_field = ft.TextField(
+        label=i18n.t("password_reset.email_label"),
+        width=400,
+        border_radius=8,
+        prefix_icon=ft.Icons.EMAIL,
+        max_length=255,
+        text_size=16,
+    )
+    status_text = ft.Text("", size=14, visible=False)
+    send_btn = ft.ElevatedButton(
+        content=ft.Text(i18n.t("password_reset.send")),
+        width=400,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+    )
+
+    async def send_clicked(e):
+        email = (email_field.value or "").strip()
+        if not email:
+            status_text.value = i18n.t("password_reset.email_required")
+            status_text.color = ft.Colors.RED
+            status_text.visible = True
+            page.update()
+            return
+
+        send_btn.disabled = True
+        send_btn.content = ft.Text(i18n.t("login.logging_in"))
+        status_text.visible = False
+        page.update()
+
+        success, msg_key = await auth_service.request_password_reset(email)
+
+        if success:
+            status_text.value = i18n.t(msg_key)
+            status_text.color = ft.Colors.GREEN
+            status_text.visible = True
+            send_btn.visible = False
+            page.update()
+            await asyncio.sleep(3)
+            dlg.open = False
+            page.update()
+        else:
+            status_text.value = i18n.t(msg_key)
+            status_text.color = ft.Colors.RED
+            status_text.visible = True
+            send_btn.disabled = False
+            send_btn.content = ft.Text(i18n.t("password_reset.send"))
+            page.update()
+
+    send_btn.on_click = send_clicked
+
+    def close_dlg(e=None):
+        dlg.open = False
+        page.update()
+
+    dlg = ft.AlertDialog(
+        modal=True,
+        title=ft.Text(
+            i18n.t("password_reset.title"),
+            size=20,
+            weight=ft.FontWeight.BOLD,
+        ),
+        content=ft.Column(
+            controls=[
+                ft.Text(i18n.t("password_reset.instruction"), size=14),
+                email_field,
+                status_text,
+                send_btn,
+            ],
+            spacing=15,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        actions=[
+            ft.TextButton(
+                i18n.t("password_reset.cancel"),
+                on_click=close_dlg,
+            ),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+
+    page.overlay.append(dlg)
+    dlg.open = True
+    page.update()
 
 
 def create_main_menu_view(page: ft.Page) -> ft.Container:

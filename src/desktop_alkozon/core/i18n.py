@@ -96,7 +96,87 @@ TRANSLATIONS = {
         "pl": "Zamow nowy towar",
         "en": "Order new product",
     },
+    "warehouse.menu_title": {"pl": "Magazyn", "en": "Warehouse"},
+    "warehouse.state_button": {"pl": "Stan magazynu", "en": "Warehouse State"},
+    "warehouse.orders_button": {
+        "pl": "Zamowienia i uzupelnienia",
+        "en": "Orders & Replenishment",
+    },
     "warehouse.back": {"pl": "Powrot do menu glownego", "en": "Back to main menu"},
+    "warehouse.back_to_hub": {
+        "pl": "Powrot do menu magazynu",
+        "en": "Back to warehouse menu",
+    },
+    "warehouse.state_title": {"pl": "Stan magazynu", "en": "Warehouse State"},
+    "warehouse.products_section": {"pl": "Produkty", "en": "Products"},
+    "warehouse.raw_materials_section": {"pl": "Surowce", "en": "Raw Materials"},
+    "warehouse.raw_table.id": {"pl": "ID", "en": "ID"},
+    "warehouse.raw_table.name": {"pl": "Nazwa", "en": "Name"},
+    "warehouse.raw_table.unit": {"pl": "Jednostka", "en": "Unit"},
+    "warehouse.raw_table.quantity": {"pl": "Ilosc", "en": "Quantity"},
+    "warehouse.raw_count": {
+        "pl": "{count} surowcow",
+        "en": "{count} raw materials",
+    },
+    "warehouse.orders_title": {
+        "pl": "Zamowienia i uzupelnienia",
+        "en": "Orders & Replenishment",
+    },
+    "warehouse.orders.table.id": {"pl": "ID", "en": "ID"},
+    "warehouse.orders.table.status": {"pl": "Status", "en": "Status"},
+    "warehouse.orders.table.note": {"pl": "Notatka", "en": "Note"},
+    "warehouse.orders.table.date": {"pl": "Data", "en": "Date"},
+    "warehouse.orders.table.lines": {"pl": "Pozycje", "en": "Lines"},
+    "warehouse.orders.table.actions": {"pl": "Akcje", "en": "Actions"},
+    "warehouse.orders.received_badge": {"pl": "Odebrane", "en": "Received"},
+    "warehouse.orders.mark_received": {
+        "pl": "Oznacz jako odebrane",
+        "en": "Mark as Received",
+    },
+    "warehouse.orders.received_success": {
+        "pl": "Zamowienie oznaczone jako odebrane",
+        "en": "Order marked as received",
+    },
+    "warehouse.orders.received_fail": {
+        "pl": "Nie udalo sie oznaczyc zamowienia jako odebrane",
+        "en": "Failed to mark order as received",
+    },
+    "warehouse.orders.create_title": {"pl": "Nowe zamowienie", "en": "New Order"},
+    "warehouse.orders.create_button": {"pl": "Zloz zamowienie", "en": "Place Order"},
+    "warehouse.orders.create_success": {
+        "pl": "Zamowienie zlozone",
+        "en": "Order placed",
+    },
+    "warehouse.orders.create_fail": {
+        "pl": "Nie udalo sie zlozyc zamowienia",
+        "en": "Failed to place order",
+    },
+    "warehouse.orders.empty": {"pl": "Brak zamowien", "en": "No orders"},
+    "warehouse.orders.new_order_button": {
+        "pl": "Nowe zamowienie",
+        "en": "New Order",
+    },
+    "warehouse.orders.product_id": {"pl": "ID produktu", "en": "Product ID"},
+    "warehouse.orders.quantity_delta": {"pl": "Zmiana ilosci", "en": "Quantity change"},
+    "warehouse.orders.note_label": {
+        "pl": "Notatka (opcjonalnie)",
+        "en": "Note (optional)",
+    },
+    "warehouse.orders.add_line": {"pl": "Dodaj pozycje", "en": "Add line"},
+    "warehouse.orders.remove_line": {"pl": "Usun", "en": "Remove"},
+    "warehouse.orders.cancel": {"pl": "Anuluj", "en": "Cancel"},
+    "warehouse.manager_only": {
+        "pl": "Tylko dla managerow",
+        "en": "Manager only",
+    },
+    "warehouse.manager_required": {
+        "pl": "Funkcje zamowien wymagaja roli managera",
+        "en": "Ordering features require manager role",
+    },
+    "warehouse.api_conn_error": {
+        "pl": "Blad polaczenia z API. Sprawdz polaczenie internetowe.",
+        "en": "API connection error. Check internet connection.",
+    },
     "employees.title": {
         "pl": "Pracownicy i oferty pracy",
         "en": "Employees and job offers",
@@ -274,6 +354,42 @@ TRANSLATIONS = {
     "deliveries.invalid_courier": {
         "pl": "Niepoprawny identyfikator kuriera",
         "en": "Invalid courier identifier",
+    },
+    "password_reset.title": {
+        "pl": "Resetowanie hasla",
+        "en": "Password Reset",
+    },
+    "password_reset.instruction": {
+        "pl": "Podaj adres email powiazany z Twoim kontem, a wyslemy Ci link do resetowania hasla.",
+        "en": "Enter the email address associated with your account and we'll send you a password reset link.",
+    },
+    "password_reset.email_label": {
+        "pl": "Email",
+        "en": "Email",
+    },
+    "password_reset.send": {
+        "pl": "Wyslij link resetujacy",
+        "en": "Send reset link",
+    },
+    "password_reset.cancel": {
+        "pl": "Anuluj",
+        "en": "Cancel",
+    },
+    "password_reset.sent": {
+        "pl": "Link resetujacy zostal wyslany na podany adres email.",
+        "en": "A password reset link has been sent to your email.",
+    },
+    "password_reset.offline": {
+        "pl": "Brak polaczenia z serwerem. Resetowanie hasla nie jest teraz mozliwe.",
+        "en": "No connection to server. Password reset is not available right now.",
+    },
+    "password_reset.error": {
+        "pl": "Wystapil blad podczas resetowania hasla. Sprobuj ponownie pozniej.",
+        "en": "An error occurred while resetting the password. Please try again later.",
+    },
+    "password_reset.email_required": {
+        "pl": "Podaj adres email.",
+        "en": "Please enter your email address.",
     },
 }
 

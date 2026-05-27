@@ -184,6 +184,18 @@ class AuthService:
                 )
                 return False
 
+    async def request_password_reset(self, email: str) -> tuple[bool, str]:
+        try:
+            await api_client.post_no_content(
+                "/auth/password-reset/request", {"email": email}
+            )
+            return True, "password_reset.sent"
+        except httpx.RequestError:
+            self._api_unavailable = True
+            return False, "password_reset.offline"
+        except Exception:
+            return False, "password_reset.error"
+
     def is_demo_mode(self) -> bool:
         return self._demo_mode
 

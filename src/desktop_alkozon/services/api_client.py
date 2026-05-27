@@ -85,6 +85,29 @@ class ApiClient:
     async def post(self, endpoint: str, data: dict | None = None) -> dict:
         return await self._request("POST", endpoint, json=data or {})
 
+    async def post_no_content(self, endpoint: str, data: dict | None = None) -> bool:
+        url = f"{self.base_url}{endpoint}"
+        headers = self._get_headers()
+        try:
+            response = await self.client.request(
+                "POST", url, headers=headers, json=data or {}
+            )
+            response.raise_for_status()
+            return True
+        except httpx.HTTPStatusError as e:
+            if (
+                e.response.status_code == 401
+                and self._refresh_token
+                and await self._refresh_access_token()
+            ):
+                headers["Authorization"] = f"Bearer {self._access_token}"
+                response = await self.client.request(
+                    "POST", url, headers=headers, json=data or {}
+                )
+                response.raise_for_status()
+                return True
+            raise
+
     async def get(self, endpoint: str, params: dict | None = None) -> dict | list:
         return await self._request("GET", endpoint, params=params)
 
