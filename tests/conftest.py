@@ -7,6 +7,17 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
+@pytest.fixture(autouse=True)
+def mock_keyring_backends(mocker):
+    mocker.patch("desktop_alkozon.core.auth.keyring.get_password", return_value=None)
+    mocker.patch("desktop_alkozon.core.auth.keyring.set_password")
+    mocker.patch("desktop_alkozon.core.auth.keyring.delete_password")
+    mocker.patch(
+        "desktop_alkozon.core.encryption.keyring.get_password", return_value=None
+    )
+    mocker.patch("desktop_alkozon.core.encryption.keyring.set_password")
+
+
 @pytest.fixture
 def valid_credentials():
     return {"email": "manager@example.com", "password": "Manager123!"}

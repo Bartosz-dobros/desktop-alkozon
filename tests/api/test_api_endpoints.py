@@ -515,10 +515,10 @@ class TestApiErrorHandling:
             "desktop_alkozon.services.api_client.load_config",
             return_value={"API_BASE_URL": "http://test:8080/api", "API_TIMEOUT": 10},
         )
-        ApiClient._instance = None
-        api_client = ApiClient()
-        api_client.client.request = AsyncMock(
-            side_effect=httpx.NetworkError("Connection failed")
+        mocker.patch(
+            "desktop_alkozon.services.api_client.api_client.client.request",
+            new_callable=AsyncMock,
+            side_effect=httpx.NetworkError("Connection failed"),
         )
 
         service = WarehouseService()

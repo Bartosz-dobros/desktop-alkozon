@@ -17,7 +17,7 @@ def create_connectivity_banner(page: ft.Page) -> ft.Container:
     banner = ft.Container(
         content=text_widget,
         bgcolor=ft.Colors.GREEN_700,
-        padding=ft.padding.symmetric(vertical=4, horizontal=16),
+        padding=ft.Padding.symmetric(vertical=4, horizontal=16),
         visible=False,
         animate_opacity=300,
     )
