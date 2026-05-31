@@ -1,7 +1,12 @@
+import contextlib
 import json
 from datetime import datetime
 
+from desktop_alkozon.core import repository
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.core.database import get_db_path
+from desktop_alkozon.core.exceptions import OfflineError
+from desktop_alkozon.core.outbox import enqueue
 from desktop_alkozon.models.api_models import (
     InventoryOverviewResponse,
     InventoryProductRow,
@@ -99,7 +104,38 @@ class WarehouseService:
     async def get_all_items(self) -> InventoryOverviewResponse | None:
         try:
             response = await api_client.get("/inventory")
+            if isinstance(response, dict):
+                with contextlib.suppress(Exception):
+                    await repository.upsert_inventory(
+                        response.get("products", []),
+                        response.get("rawMaterials", []),
+                        get_db_path(),
+                    )
             return InventoryOverviewResponse(**response)
+        except OfflineError:
+            db_path = get_db_path()
+            products = await repository.get_all_inventory_products(db_path)
+            raw_materials = await repository.get_all_inventory_raw_materials(db_path)
+            return InventoryOverviewResponse(
+                products=[
+                    InventoryProductRow(
+                        productId=p["product_id"],
+                        name=p["name"],
+                        quantity=p["quantity"],
+                        warehouseZone=p.get("warehouse_zone"),
+                    )
+                    for p in products
+                ],
+                rawMaterials=[
+                    InventoryRawRow(
+                        id=rm["id"],
+                        name=rm["name"],
+                        unit=rm["unit"],
+                        quantity=rm["quantity"],
+                    )
+                    for rm in raw_materials
+                ],
+            )
         except Exception as e:
             status = getattr(e, "response", None)
             code = status.status_code if status else "?"
@@ -229,6 +265,16 @@ class WarehouseService:
             )
             _session_cache.insert(0, fallback)
             return fallback
+        except OfflineError:
+            db_path = get_db_path()
+            await enqueue(
+                "replenishment",
+                "POST",
+                "/warehouse/replenishment",
+                request_body=payload,
+                db_path=db_path,
+            )
+            return None
         except Exception as e:
             status = getattr(e, "response", None)
             code = status.status_code if status else "?"
@@ -267,6 +313,18 @@ class WarehouseService:
                 f"/inventory/products/{item_id}", {"delta": delta}
             )
             return InventoryProductRow(**response)
+        except OfflineError:
+            db_path = get_db_path()
+            await repository.update_inventory_product_quantity(item_id, delta, db_path)
+            await enqueue(
+                "inventory",
+                "PATCH",
+                f"/inventory/products/{item_id}",
+                entity_id=str(item_id),
+                request_body={"delta": delta},
+                db_path=db_path,
+            )
+            return None
         except Exception:
             return None
 
@@ -278,6 +336,20 @@ class WarehouseService:
                 f"/inventory/raw-materials/{material_id}", {"delta": delta}
             )
             return InventoryRawRow(**response)
+        except OfflineError:
+            db_path = get_db_path()
+            await repository.update_inventory_raw_material_quantity(
+                material_id, delta, db_path
+            )
+            await enqueue(
+                "inventory",
+                "PATCH",
+                f"/inventory/raw-materials/{material_id}",
+                entity_id=str(material_id),
+                request_body={"delta": delta},
+                db_path=db_path,
+            )
+            return None
         except Exception:
             return None
 
@@ -288,8 +360,27 @@ class WarehouseService:
             if isinstance(response, list):
                 orders = [_parse_order(item) for item in response]
                 _session_cache = orders
+                with contextlib.suppress(Exception):
+                    await repository.upsert_replenishments(response, get_db_path())
                 return orders
             return []
+        except OfflineError:
+            rows = await repository.get_all_replenishments(get_db_path())
+            orders = []
+            for r in rows:
+                lines_data = json.loads(r.get("lines", "[]")) if r.get("lines") else []
+                lines = [_parse_line(ln) for ln in lines_data]
+                orders.append(
+                    WarehouseReplenishment(
+                        id=r["id"],
+                        status=r.get("status", "PENDING"),
+                        note=r.get("note"),
+                        createdAt=r.get("created_at", datetime.now()),
+                        lines=lines,
+                    )
+                )
+            _session_cache = orders
+            return orders
         except Exception as e:
             status = getattr(e, "response", None)
             code = status.status_code if status else "?"

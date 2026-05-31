@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 from desktop_alkozon.core.auth import AuthService, LoginCredentials
@@ -119,3 +121,151 @@ def test_locked_account_blocks_login(auth_service):
     result = auth_service.login_sync("admin@example.com", "password123")
 
     assert result is False
+
+
+class TestAuthOffline:
+    def test_offline_session_flag(self, auth_service):
+        auth_service._current_user = None
+        assert auth_service.is_offline_session() is False
+        auth_service._current_user = {"_offline": True, "email": "test@test.com"}
+        assert auth_service.is_offline_session() is True
+
+    @pytest.mark.asyncio
+    async def test_has_local_user_no_db(self, auth_service, mocker):
+        mocker.patch(
+            "desktop_alkozon.core.auth.get_db",
+            side_effect=Exception("DB error"),
+        )
+        result = await auth_service.has_local_user("test@test.com")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_has_local_user_found(self, auth_service, mocker):
+        fake_cursor = MagicMock()
+        fake_cursor.fetchone = AsyncMock(return_value=MagicMock())
+        fake_db = AsyncMock()
+        fake_db.__aenter__ = AsyncMock(return_value=fake_db)
+        fake_db.__aexit__ = AsyncMock(return_value=None)
+        fake_db.execute = AsyncMock(return_value=fake_cursor)
+        mocker.patch(
+            "desktop_alkozon.core.auth.get_db",
+            return_value=fake_db,
+        )
+        assert await auth_service.has_local_user("test@test.com") is True
+
+    @pytest.mark.asyncio
+    async def test_verify_local_user_bad_hash(self, auth_service, mocker):
+        fake_row = MagicMock()
+        fake_row.__getitem__.side_effect = lambda k: {
+            "password_hash": "$2b$12$badhash",
+            "email": "test@test.com",
+            "role": "MANAGER",
+            "first_name": None,
+            "last_name": None,
+            "device_id": "desktop-001",
+        }.get(k, "")
+        fake_cursor = MagicMock()
+        fake_cursor.fetchone = AsyncMock(return_value=fake_row)
+        fake_db = AsyncMock()
+        fake_db.__aenter__ = AsyncMock(return_value=fake_db)
+        fake_db.__aexit__ = AsyncMock(return_value=None)
+        fake_db.execute = AsyncMock(return_value=fake_cursor)
+        mocker.patch(
+            "desktop_alkozon.core.auth.get_db",
+            return_value=fake_db,
+        )
+        result = await auth_service._verify_local_user("test@test.com", "wrongpass")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_login_offline_failure(self, auth_service, mocker):
+        mocker.patch.object(auth_service, "_verify_local_user", return_value=None)
+        result = await auth_service.login_offline("test@test.com", "pass")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_login_offline_success(self, auth_service, mocker):
+        mocker.patch.object(
+            auth_service,
+            "_verify_local_user",
+            return_value={
+                "email": "test@test.com",
+                "role": "MANAGER",
+                "_offline": True,
+            },
+        )
+        result = await auth_service.login_offline("test@test.com", "pass")
+        assert result is True
+        assert auth_service.is_offline_session() is True
+        assert auth_service._current_user["email"] == "test@test.com"
+
+    @pytest.mark.asyncio
+    async def test_login_offline_locked(self, auth_service):
+        auth_service.locked = True
+        result = await auth_service.login_offline("test@test.com", "pass")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_login_calls_store_local_user(self, auth_service, mocker):
+        store_mock = mocker.patch.object(auth_service, "_store_local_user")
+        mocker.patch.object(
+            auth_service,
+            "_decode_jwt",
+            return_value={"sub": "1", "email": "a@b.com", "role": "MANAGER"},
+        )
+        token_response = MagicMock()
+        token_response.accessToken = "tok"
+        token_response.refreshToken = "ref"
+        response_data = MagicMock(spec=["verification_required", "tokens"])
+        response_data.verification_required = False
+        response_data.tokens = token_response
+        mocker.patch(
+            "desktop_alkozon.core.auth.StaffLoginResponse",
+            return_value=response_data,
+        )
+        api_client_mock = mocker.patch("desktop_alkozon.core.auth.api_client")
+        api_client_mock.post = AsyncMock(
+            return_value={"accessToken": "tok", "refreshToken": "ref"}
+        )
+        result = await auth_service.login("a@b.com", "pass")
+        assert result is True
+        store_mock.assert_called_once_with("a@b.com", "pass", "MANAGER")
+        assert auth_service.is_offline_session() is True
+        assert auth_service._current_user["email"] == "test@test.com"
+
+    @pytest.mark.asyncio
+    async def test_login_offline_locked(self, auth_service):
+        auth_service.locked = True
+        result = await auth_service.login_offline("test@test.com", "pass")
+        assert result is False
+
+    def test_login_calls_store_local_user(self, auth_service, mocker):
+        mocker.patch.object(auth_service, "_store_local_user")
+        mocker.patch.object(
+            auth_service,
+            "_decode_jwt",
+            return_value={"sub": "1", "email": "a@b.com", "role": "MANAGER"},
+        )
+        mocker.patch(
+            "desktop_alkozon.core.auth.keyring.set_password",
+        )
+        mocker.patch("desktop_alkozon.core.auth.api_client")
+
+        token_response = MagicMock()
+        token_response.accessToken = "tok"
+        token_response.refreshToken = "ref"
+        response_data = MagicMock()
+        response_data.verification_required = False
+        response_data.tokens = token_response
+        mocker.patch(
+            "desktop_alkozon.core.auth.StaffLoginResponse", return_value=response_data
+        )
+        api_client_mock = mocker.patch("desktop_alkozon.core.auth.api_client")
+        api_client_mock.post = AsyncMock(
+            return_value={"accessToken": "tok", "refreshToken": "ref"}
+        )
+
+        import asyncio
+
+        result = asyncio.run(auth_service.login("a@b.com", "pass"))
+        assert result is True

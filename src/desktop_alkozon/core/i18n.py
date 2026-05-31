@@ -228,8 +228,8 @@ TRANSLATIONS = {
         "en": "Email is required.",
     },
     "employees.password_length": {
-        "pl": "Haslo musi miec co najmniej 8 znakow.",
-        "en": "Password must be at least 8 characters.",
+        "pl": "Hasło musi mieć co najmniej 8 znaków, dużą literę, małą literę, cyfrę i znak specjalny.",
+        "en": "Password must be at least 8 characters with uppercase, lowercase, digit and special character.",
     },
     "employees.password_mismatch": {
         "pl": "Hasla nie sa zgodne.",
@@ -390,6 +390,42 @@ TRANSLATIONS = {
     "password_reset.email_required": {
         "pl": "Podaj adres email.",
         "en": "Please enter your email address.",
+    },
+    "offline.banner_offline": {
+        "pl": "Offline - zmiany beda synchronizowane po przywroceniu polaczenia",
+        "en": "Offline - changes will be synced when connection is restored",
+    },
+    "offline.banner_syncing": {
+        "pl": "Synchronizacja...",
+        "en": "Syncing...",
+    },
+    "offline.banner_online": {
+        "pl": "Online",
+        "en": "Online",
+    },
+    "offline.login_success": {
+        "pl": "Zalogowano offline - dostepne sa ostatnio zsynchronizowane dane",
+        "en": "Logged in offline - last synced data available",
+    },
+    "offline.login_no_user": {
+        "pl": "Brak polaczenia z internetem. Zaloguj sie online przynajmniej raz, aby moc pracowac offline.",
+        "en": "No internet connection. Please log in online at least once to work offline.",
+    },
+    "offline.sync_result": {
+        "pl": "{success} wyslanych, {failed} odrzuconych",
+        "en": "{success} sent, {failed} rejected",
+    },
+    "offline.sync_success": {
+        "pl": "{success} zmian zsynchronizowanych",
+        "en": "{success} changes synced",
+    },
+    "offline.wrong_password": {
+        "pl": "Nieprawidlowe haslo w trybie offline. Sprobuj ponownie.",
+        "en": "Incorrect password in offline mode. Try again.",
+    },
+    "offline.queued": {
+        "pl": "Zapisano offline - zostanie wyslane po przywroceniu polaczenia",
+        "en": "Saved offline - will sync when connection is restored",
     },
 }
 

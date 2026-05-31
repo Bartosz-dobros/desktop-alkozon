@@ -3,6 +3,7 @@ import pytest
 from desktop_alkozon.features.deliveries.service import DeliveriesService
 from desktop_alkozon.models.api_models import (
     DeliveryAnnouncementResponse,
+    DeliveryDetails,
     DeliveryResponse,
     DeliveryStatus,
 )
@@ -35,11 +36,19 @@ def test_delivery_model():
         courierId=1,
         courierEmail="jan@example.com",
         status=DeliveryStatus.PENDING,
-        addressSnapshot="Warszawa",
+        deliveryDetails=DeliveryDetails(
+            recipientName="Jan Kowalski",
+            streetAddress="Marszalkowska 1",
+            city="Warszawa",
+            postalCode="00-001",
+            country="Polska",
+        ),
         customerEmail="customer@example.com",
     )
     assert delivery.id == 1
     assert delivery.status == DeliveryStatus.PENDING
+    assert delivery.deliveryDetails is not None
+    assert delivery.deliveryDetails.city == "Warszawa"
 
 
 def test_delivery_announcement_model():
@@ -79,7 +88,13 @@ async def test_get_deliveries_async(deliveries_service, mocker):
             "courierId": 1,
             "courierEmail": "jan@example.com",
             "status": "IN_TRANSIT",
-            "addressSnapshot": "Warszawa",
+            "deliveryDetails": {
+                "recipientName": "Jan Kowalski",
+                "streetAddress": "Marszalkowska 1",
+                "city": "Warszawa",
+                "postalCode": "00-001",
+                "country": "Polska",
+            },
             "customerEmail": "customer@example.com",
         }
     ]
@@ -117,7 +132,13 @@ async def test_get_unassigned_couriers_async(deliveries_service, mocker):
             "courierId": 1,
             "courierEmail": "jan@example.com",
             "status": "IN_TRANSIT",
-            "addressSnapshot": "Warszawa",
+            "deliveryDetails": {
+                "recipientName": "Jan Kowalski",
+                "streetAddress": "Marszalkowska 1",
+                "city": "Warszawa",
+                "postalCode": "00-001",
+                "country": "Polska",
+            },
         }
     ]
     mocker.patch(

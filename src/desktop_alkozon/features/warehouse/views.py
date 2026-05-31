@@ -1,17 +1,26 @@
 import flet as ft
 
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.core.connectivity import connectivity_service
 from desktop_alkozon.core.i18n import i18n
 from desktop_alkozon.features.warehouse.controller import WarehouseController
 
 RECEIVED_ORDER_IDS: set[int] = set()
 
 
-def _show_snack(page: ft.Page, message: str, is_error: bool = False):
+def _show_snack(
+    page: ft.Page, message: str, is_error: bool = False, is_warning: bool = False
+):
+    if is_warning:
+        bgcolor = ft.Colors.AMBER_700
+    elif is_error:
+        bgcolor = ft.Colors.RED_800
+    else:
+        bgcolor = ft.Colors.GREEN_800
     snack = ft.SnackBar(
         content=ft.Text(message),
         duration=3000,
-        bgcolor=ft.Colors.RED_800 if is_error else ft.Colors.GREEN_800,
+        bgcolor=bgcolor,
     )
     page.overlay.append(snack)
     snack.open = True
@@ -471,11 +480,18 @@ def _open_new_order_dialog(
                 i18n.t("warehouse.orders.create_success"),
             )
         if fail_count > 0:
-            _show_snack(
-                page,
-                i18n.t("warehouse.orders.create_fail"),
-                is_error=True,
-            )
+            if not connectivity_service.is_online():
+                _show_snack(
+                    page,
+                    i18n.t("offline.queued"),
+                    is_warning=True,
+                )
+            else:
+                _show_snack(
+                    page,
+                    i18n.t("warehouse.orders.create_fail"),
+                    is_error=True,
+                )
 
         await reload_callback()
 
@@ -534,6 +550,8 @@ async def _mark_received(
     if success:
         RECEIVED_ORDER_IDS.add(order_id)
         _show_snack(page, i18n.t("warehouse.orders.received_success"))
+    elif not connectivity_service.is_online():
+        _show_snack(page, i18n.t("offline.queued"), is_warning=True)
     else:
         _show_snack(page, i18n.t("warehouse.orders.received_fail"), is_error=True)
     await reload_callback()

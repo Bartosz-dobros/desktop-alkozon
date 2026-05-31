@@ -1,6 +1,7 @@
 import flet as ft
 
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.core.connectivity import connectivity_service
 from desktop_alkozon.core.i18n import i18n
 from desktop_alkozon.features.deliveries.controller import DeliveriesController
 
@@ -12,6 +13,25 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
     deliveries = []
     unassigned_couriers = []
     selected_delivery_id = None
+
+    def format_address(details) -> str:
+        if details is None:
+            return "-"
+        parts = [
+            p
+            for p in [
+                details.recipientName,
+                details.streetAddress,
+                (
+                    f"{details.postalCode} {details.city}".strip()
+                    if details.postalCode or details.city
+                    else None
+                ),
+                details.country,
+            ]
+            if p
+        ]
+        return ", ".join(parts) if parts else "-"
 
     deliveries_table = ft.DataTable(
         columns=[
@@ -50,8 +70,13 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
                     ft.DataRow(
                         cells=[
                             ft.DataCell(ft.Text(str(d.id))),
-                            ft.DataCell(ft.Text(str(d.orderId))),
-                            ft.DataCell(ft.Text(d.addressSnapshot)),
+                            ft.DataCell(
+                                ft.Text(
+                                    d.clientOrderNumber
+                                    or str(d.orderId or d.customOrderId or "-")
+                                )
+                            ),
+                            ft.DataCell(ft.Text(format_address(d.deliveryDetails))),
                             ft.DataCell(
                                 ft.Text(
                                     d.status.value
@@ -103,6 +128,14 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
         snack.open = True
         page.update()
 
+    def show_warning(message: str):
+        snack = ft.SnackBar(
+            content=ft.Text(message), duration=3000, bgcolor=ft.Colors.AMBER_700
+        )
+        page.overlay.append(snack)
+        snack.open = True
+        page.update()
+
     def select_delivery(delivery_id: int):
         nonlocal selected_delivery_id
         selected_delivery_id = delivery_id
@@ -117,12 +150,21 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
 
             deliveries = await controller.get_deliveries(status="PENDING") or []
             unassigned_couriers = await controller.get_unassigned_couriers() or []
+            print(
+                f"[DEBUG VIEW] deliveries={len(deliveries)}, couriers={len(unassigned_couriers)}",
+                flush=True,
+            )
+            if not deliveries:
+                show_error("API zwróciło 0 dostaw. Sprawdź terminal po szczegóły.")
             refresh_tables()
 
             loading.visible = False
             page.update()
         except Exception as e:
             print(f"Error loading deliveries data: {e}")
+            import traceback
+
+            traceback.print_exc()
             deliveries = controller.get_deliveries_sync() or []
             unassigned_couriers = controller.get_unassigned_couriers_sync() or []
             refresh_tables()
@@ -133,6 +175,8 @@ def create_deliveries_view(page: ft.Page) -> ft.Container:
         result = await controller.assign_courier(delivery_id, courier_id)
         if result:
             show_success(i18n.t("deliveries.assign_success", delivery_id=delivery_id))
+        elif not connectivity_service.is_online():
+            show_warning(i18n.t("offline.queued"))
         else:
             show_error(i18n.t("deliveries.assign_failed", delivery_id=delivery_id))
         await load_data()

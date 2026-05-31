@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class UserRole(StrEnum):
@@ -203,16 +203,36 @@ class InventoryOverviewResponse(BaseModel):
     rawMaterials: list[InventoryRawRow]
 
 
+class DeliveryDetails(BaseModel):
+    recipientName: str | None = None
+    streetAddress: str | None = None
+    city: str | None = None
+    postalCode: str | None = None
+    country: str | None = None
+    deliveryNotes: str | None = None
+    paymentMethod: str | None = None
+
+
 class DeliveryResponse(BaseModel):
     id: int
-    orderId: int
+    orderId: int | None = None
+    customOrderId: int | None = None
+    customOrder: bool = False
+    clientOrderNumber: str | None = None
     courierId: int | None = None
     courierEmail: str | None = None
     status: DeliveryStatus
-    addressSnapshot: str
+    deliveryDetails: DeliveryDetails | None = None
     customerEmail: str | None = None
     startedAt: datetime | None = None
     deliveredAt: datetime | None = None
+
+    @field_validator("startedAt", "deliveredAt", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
 
 
 class PatchQuantityRequest(BaseModel):

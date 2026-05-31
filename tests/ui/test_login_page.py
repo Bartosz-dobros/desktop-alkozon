@@ -11,9 +11,32 @@ from desktop_alkozon.ui.pages.login_page import (
 
 
 def _get_content_controls(view):
-    if hasattr(view, "content"):
+    if (
+        hasattr(view, "content")
+        and view.content is not None
+        and hasattr(view.content, "controls")
+    ):
         return view.content.controls
-    return view.controls[0].content.controls
+    if not hasattr(view, "controls") or not view.controls:
+        return []
+    first = view.controls[0]
+    if (
+        hasattr(first, "content")
+        and first.content is not None
+        and hasattr(first.content, "controls")
+    ):
+        return first.content.controls
+    if hasattr(first, "controls"):
+        for c in first.controls:
+            if (
+                hasattr(c, "content")
+                and c.content is not None
+                and hasattr(c.content, "controls")
+                and getattr(c, "expand", None)
+            ):
+                return c.content.controls
+        return first.controls
+    return []
 
 
 class TestLoginPageView:

@@ -3,6 +3,7 @@ import asyncio
 import flet as ft
 
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.core.database import init_db
 from desktop_alkozon.core.logger import setup_logger
 from desktop_alkozon.ui.pages.login_page import create_login_page_view
 
@@ -16,6 +17,8 @@ def main(page: ft.Page):
     page.window_resizable = True
     page.window_min_width = 800
     page.window_min_height = 600
+
+    page.run_task(init_db)
 
     page.add(create_login_page_view(page))
 

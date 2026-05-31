@@ -1,6 +1,9 @@
+from urllib.parse import urlparse
+
 import httpx
 
 from desktop_alkozon.config import load_config
+from desktop_alkozon.core.exceptions import OfflineError
 
 
 class ApiClient:
@@ -17,7 +20,11 @@ class ApiClient:
             return
         self._initialized = True
         config = load_config()
-        self.base_url = config.get("API_BASE_URL") or "http://localhost:8080/api"
+        raw_url = config.get("API_BASE_URL") or "http://localhost:8080/api"
+        parsed = urlparse(raw_url)
+        if not parsed.scheme:
+            raw_url = f"http://{raw_url}"
+        self.base_url = raw_url.rstrip("/")
         self.timeout = config.get("API_TIMEOUT", 30)
         self.client = httpx.AsyncClient(timeout=self.timeout)
         self._access_token: str | None = None
@@ -32,6 +39,18 @@ class ApiClient:
     def clear_tokens(self):
         self._access_token = None
         self._refresh_token = None
+
+    async def health_check(self) -> bool:
+        try:
+            response = await self.client.get(
+                f"{self.base_url}/inventory",
+                headers=self._get_headers(),
+                params={"_": hash(str(id(self)))},
+                timeout=5,
+            )
+            return response.status_code < 500
+        except Exception:
+            return False
 
     def _get_headers(self) -> dict:
         headers = {"Content-Type": "application/json"}
@@ -70,6 +89,10 @@ class ApiClient:
             response = await self.client.request(method, url, **kwargs)
             response.raise_for_status()
             return response.json()
+        except httpx.ConnectError as e:
+            raise OfflineError(f"Cannot connect to API: {e}") from e
+        except httpx.TimeoutException as e:
+            raise OfflineError(f"API timeout: {e}") from e
         except httpx.HTTPStatusError as e:
             if (
                 e.response.status_code == 401

@@ -4,7 +4,10 @@ import flet as ft
 
 from desktop_alkozon.config import is_demo_mode_enabled
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.core.connectivity import connectivity_service
 from desktop_alkozon.core.i18n import i18n
+from desktop_alkozon.core.sync_manager import sync_manager
+from desktop_alkozon.ui.components.connectivity_banner import create_connectivity_banner
 from desktop_alkozon.ui.components.settings_drawer import (
     make_hamburger_button,
     make_settings_drawer,
@@ -92,6 +95,18 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
                 page.update()
                 return
 
+            if not auth_service.get_pending_challenge():
+                offline_success = await auth_service.login_offline(
+                    username_field.value or "",
+                    password_field.value or "",
+                )
+                if offline_success:
+                    loading[0] = False
+                    page.clean()
+                    page.add(create_main_menu_view(page))
+                    page.update()
+                    return
+
         if verification_required[0]:
             success = await auth_service.verify_staff_login(
                 challenge_id[0] or "",
@@ -111,7 +126,11 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         login_button.disabled = False
         login_button.content = ft.Text(i18n.t("login.button"))
         if auth_service.is_api_unavailable():
-            status_text.value = i18n.t("login.connection_error")
+            if await auth_service.has_local_user(username_field.value or ""):
+                status_text.value = i18n.t("offline.wrong_password")
+                status_text.color = ft.Colors.RED
+            else:
+                status_text.value = i18n.t("offline.login_no_user")
             status_text.visible = True
         elif auth_service.is_locked():
             status_text.value = i18n.t("login.account_locked")
@@ -300,69 +319,88 @@ def create_main_menu_view(page: ft.Page) -> ft.Container:
         page.update()
 
     def logout(e):
+        connectivity_service.stop()
+        page.run_task(sync_manager.stop)
         auth_service.logout()
         page.clean()
         page.add(create_login_page_view(page))
         page.update()
 
+    connectivity_banner = create_connectivity_banner(page)
+
+    async def _init_services_and_sync():
+        await sync_manager.start()
+        connectivity_service.start()
+        await sync_manager._on_connectivity_online()
+        await sync_manager.full_sync()
+
+    page.run_task(_init_services_and_sync)
+
     return ft.Stack(
         controls=[
-            ft.Container(
+            ft.Column(
                 expand=True,
-                padding=40,
-                content=ft.Column(
-                    expand=True,
-                    controls=[
-                        ft.Text(
-                            "AlkozOn Desktop",
-                            size=32,
-                            weight=ft.FontWeight.BOLD,
+                spacing=0,
+                controls=[
+                    connectivity_banner,
+                    ft.Container(
+                        expand=True,
+                        padding=40,
+                        content=ft.Column(
+                            expand=True,
+                            controls=[
+                                ft.Text(
+                                    "AlkozOn Desktop",
+                                    size=32,
+                                    weight=ft.FontWeight.BOLD,
+                                ),
+                                ft.Text(
+                                    i18n.t("menu.logged_in_as", name=user_name),
+                                    size=16,
+                                ),
+                                ft.Text(
+                                    user_email,
+                                    size=12,
+                                    color=ft.Colors.GREY_400,
+                                ),
+                                ft.Divider(),
+                                ft.ElevatedButton(
+                                    i18n.t("menu.warehouse"),
+                                    width=500,
+                                    height=60,
+                                    on_click=go_to_warehouse,
+                                ),
+                                ft.ElevatedButton(
+                                    i18n.t("menu.deliveries"),
+                                    width=500,
+                                    height=60,
+                                    on_click=go_to_deliveries,
+                                ),
+                                ft.ElevatedButton(
+                                    i18n.t("menu.employees"),
+                                    width=500,
+                                    height=60,
+                                    on_click=go_to_employees,
+                                ),
+                                ft.Divider(),
+                                ft.ElevatedButton(
+                                    i18n.t("menu.logout"),
+                                    width=500,
+                                    height=50,
+                                    icon=ft.Icons.LOGOUT,
+                                    on_click=logout,
+                                    style=ft.ButtonStyle(
+                                        bgcolor=ft.Colors.RED_700,
+                                        color=ft.Colors.WHITE,
+                                    ),
+                                ),
+                            ],
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=15,
+                            scroll=ft.ScrollMode.AUTO,
                         ),
-                        ft.Text(
-                            i18n.t("menu.logged_in_as", name=user_name),
-                            size=16,
-                        ),
-                        ft.Text(
-                            user_email,
-                            size=12,
-                            color=ft.Colors.GREY_400,
-                        ),
-                        ft.Divider(),
-                        ft.ElevatedButton(
-                            i18n.t("menu.warehouse"),
-                            width=500,
-                            height=60,
-                            on_click=go_to_warehouse,
-                        ),
-                        ft.ElevatedButton(
-                            i18n.t("menu.deliveries"),
-                            width=500,
-                            height=60,
-                            on_click=go_to_deliveries,
-                        ),
-                        ft.ElevatedButton(
-                            i18n.t("menu.employees"),
-                            width=500,
-                            height=60,
-                            on_click=go_to_employees,
-                        ),
-                        ft.Divider(),
-                        ft.ElevatedButton(
-                            i18n.t("menu.logout"),
-                            width=500,
-                            height=50,
-                            icon=ft.Icons.LOGOUT,
-                            on_click=logout,
-                            style=ft.ButtonStyle(
-                                bgcolor=ft.Colors.RED_700,
-                                color=ft.Colors.WHITE,
-                            ),
-                        ),
-                    ],
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=15,
-                    scroll=ft.ScrollMode.AUTO,
-                ),
+                    ),
+                ],
             ),
             ft.Container(
                 content=make_hamburger_button(page),

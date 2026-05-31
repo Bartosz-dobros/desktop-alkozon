@@ -1,5 +1,6 @@
 from desktop_alkozon.models.api_models import (
     DeliveryAnnouncementResponse,
+    DeliveryDetails,
     DeliveryResponse,
     DeliveryStatus,
     InventoryItem,
@@ -99,10 +100,18 @@ class TestDeliveryModel:
             id=1,
             orderId=100,
             status=DeliveryStatus.IN_TRANSIT,
-            addressSnapshot="Warszawa",
+            deliveryDetails=DeliveryDetails(
+                recipientName="Jan Kowalski",
+                streetAddress="Marszalkowska 1",
+                city="Warszawa",
+                postalCode="00-001",
+                country="Polska",
+            ),
         )
         assert delivery.id == 1
         assert delivery.status == DeliveryStatus.IN_TRANSIT
+        assert delivery.deliveryDetails is not None
+        assert delivery.deliveryDetails.city == "Warszawa"
 
     def test_delivery_announcement(self):
         announcement = DeliveryAnnouncementResponse(

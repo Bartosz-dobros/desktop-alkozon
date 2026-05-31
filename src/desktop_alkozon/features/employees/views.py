@@ -1,6 +1,9 @@
+import re
+
 import flet as ft
 
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.core.connectivity import connectivity_service
 from desktop_alkozon.core.i18n import i18n
 from desktop_alkozon.features.employees.controller import EmployeesController
 
@@ -205,6 +208,16 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
         snack.open = True
         page.update()
 
+    def show_warning(message: str):
+        snack = ft.SnackBar(
+            content=ft.Text(message),
+            duration=3000,
+            bgcolor=ft.Colors.AMBER_700,
+        )
+        page.overlay.append(snack)
+        snack.open = True
+        page.update()
+
     async def load_employees():
         nonlocal employees
         try:
@@ -237,7 +250,14 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
         if not email:
             show_error(i18n.t("employees.email_required"))
             return
-        if not password or len(password) < 8:
+        if (
+            not password
+            or len(password) < 8
+            or not re.search(r"[A-Z]", password)
+            or not re.search(r"[a-z]", password)
+            or not re.search(r"\d", password)
+            or not re.search(r"[!@#$%^&*(),.?\":{}|<>_\-]|[^\w\s]", password)
+        ):
             show_error(i18n.t("employees.password_length"))
             return
         if password != confirm:
@@ -262,6 +282,8 @@ def create_employee_list_view(page: ft.Page) -> ft.Container:
                 role_dropdown.value = "EMPLOYEE"
                 employees = await controller.get_employees() or []
                 refresh_groups()
+            elif not connectivity_service.is_online():
+                show_warning(i18n.t("offline.queued"))
             else:
                 show_error(i18n.t("employees.create_failed"))
 
@@ -445,6 +467,16 @@ def create_job_offers_view(page: ft.Page) -> ft.Container:
         snack.open = True
         page.update()
 
+    def show_warning(message: str):
+        snack = ft.SnackBar(
+            content=ft.Text(message),
+            duration=3000,
+            bgcolor=ft.Colors.AMBER_700,
+        )
+        page.overlay.append(snack)
+        snack.open = True
+        page.update()
+
     async def load_offers():
         nonlocal offers
         try:
@@ -471,6 +503,8 @@ def create_job_offers_view(page: ft.Page) -> ft.Container:
             result = await controller.update_offer(offer_id, "", "", "CLOSED")
             if result:
                 show_success(i18n.t("offers.close_success"))
+            elif not connectivity_service.is_online():
+                show_warning(i18n.t("offline.queued"))
             else:
                 show_error(i18n.t("offers.close_failed"))
 
@@ -487,6 +521,8 @@ def create_job_offers_view(page: ft.Page) -> ft.Container:
         result = await controller.create_offer(title, description)
         if result:
             show_success(i18n.t("offers.create_success"))
+        elif not connectivity_service.is_online():
+            show_warning(i18n.t("offline.queued"))
         else:
             show_error(i18n.t("offers.create_failed"))
         await load_offers()

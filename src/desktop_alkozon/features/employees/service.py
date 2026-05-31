@@ -1,6 +1,13 @@
+import contextlib
+from datetime import datetime
+
 import jwt
 
+from desktop_alkozon.core import repository
 from desktop_alkozon.core.auth import auth_service
+from desktop_alkozon.core.database import get_db_path
+from desktop_alkozon.core.exceptions import OfflineError
+from desktop_alkozon.core.outbox import enqueue
 from desktop_alkozon.models.api_models import (
     JobOfferResponse,
     JobOfferStatus,
@@ -14,8 +21,25 @@ class EmployeesService:
         try:
             response = await api_client.get("/admin/job-offers")
             if isinstance(response, list):
-                return [JobOfferResponse(**item) for item in response]
+                items = [JobOfferResponse(**item) for item in response]
+                with contextlib.suppress(Exception):
+                    await repository.upsert_job_offers(response, get_db_path())
+                return items
             return []
+        except OfflineError:
+            db_path = get_db_path()
+            rows = await repository.get_all_job_offers(db_path)
+            return [
+                JobOfferResponse(
+                    id=r["id"],
+                    title=r["title"],
+                    description=r.get("description"),
+                    status=r.get("status", "OPEN"),
+                    createdAt=r.get("created_at") or datetime.now(),
+                    updatedAt=r.get("updated_at") or datetime.now(),
+                )
+                for r in rows
+            ]
         except Exception:
             if auth_service.is_demo_mode():
                 return [
@@ -42,12 +66,30 @@ class EmployeesService:
         try:
             response = await api_client.get("/admin/users")
             if isinstance(response, list):
+                with contextlib.suppress(Exception):
+                    await repository.upsert_users(response, get_db_path())
                 return [
                     UserAdminResponse(**item)
                     for item in response
                     if item.get("role") in ["EMPLOYEE", "MANAGER"]
                 ]
             return []
+        except OfflineError:
+            rows = await repository.get_all_users(get_db_path())
+            return [
+                UserAdminResponse(
+                    **{
+                        "id": r["id"],
+                        "email": r["email"],
+                        "role": r["role"],
+                        "active": bool(r["active"]),
+                        "courier": bool(r["courier"]),
+                        "ageConfirmedAt": r.get("age_confirmed_at"),
+                    }
+                )
+                for r in rows
+                if r.get("role") in ("EMPLOYEE", "MANAGER")
+            ]
         except Exception:
             if auth_service.is_demo_mode():
                 return [
@@ -72,8 +114,25 @@ class EmployeesService:
         try:
             response = await api_client.get("/admin/users")
             if isinstance(response, list):
+                with contextlib.suppress(Exception):
+                    await repository.upsert_users(response, get_db_path())
                 return [UserAdminResponse(**item) for item in response]
             return []
+        except OfflineError:
+            rows = await repository.get_all_users(get_db_path())
+            return [
+                UserAdminResponse(
+                    **{
+                        "id": r["id"],
+                        "email": r["email"],
+                        "role": r["role"],
+                        "active": bool(r["active"]),
+                        "courier": bool(r["courier"]),
+                        "ageConfirmedAt": r.get("age_confirmed_at"),
+                    }
+                )
+                for r in rows
+            ]
         except Exception:
             if auth_service.is_demo_mode():
                 return [
@@ -101,7 +160,20 @@ class EmployeesService:
             response = await api_client.post(
                 "/admin/job-offers", {"title": title, "description": description}
             )
-            return JobOfferResponse(**response)
+            if response:
+                with contextlib.suppress(Exception):
+                    await repository.upsert_job_offers([response], get_db_path())
+            return JobOfferResponse(**response) if response else None
+        except OfflineError:
+            db_path = get_db_path()
+            await enqueue(
+                "job_offer",
+                "POST",
+                "/admin/job-offers",
+                request_body={"title": title, "description": description},
+                db_path=db_path,
+            )
+            return None
         except Exception:
             return None
 
@@ -116,7 +188,32 @@ class EmployeesService:
                     f"/admin/job-offers/{offer_id}",
                     {"title": title, "description": description},
                 )
-            return JobOfferResponse(**response)
+            if response:
+                with contextlib.suppress(Exception):
+                    await repository.upsert_job_offers([response], get_db_path())
+            return JobOfferResponse(**response) if response else None
+        except OfflineError:
+            db_path = get_db_path()
+            endpoint = (
+                f"/admin/job-offers/{offer_id}/close"
+                if status == "CLOSED"
+                else f"/admin/job-offers/{offer_id}"
+            )
+            method = "POST" if status == "CLOSED" else "PUT"
+            body = (
+                None
+                if status == "CLOSED"
+                else {"title": title, "description": description}
+            )
+            await enqueue(
+                "job_offer",
+                method,
+                endpoint,
+                entity_id=str(offer_id),
+                request_body=body,
+                db_path=db_path,
+            )
+            return None
         except Exception:
             return None
 
@@ -124,20 +221,53 @@ class EmployeesService:
         try:
             await api_client.delete(f"/admin/job-offers/{offer_id}")
             return True
+        except OfflineError:
+            await enqueue(
+                "job_offer",
+                "DELETE",
+                f"/admin/job-offers/{offer_id}",
+                entity_id=str(offer_id),
+                db_path=get_db_path(),
+            )
+            return False
         except Exception:
             return False
 
     async def hire_employee(self, user_id: int) -> UserAdminResponse | None:
         try:
             response = await api_client.post(f"/admin/users/{user_id}/hire")
-            return UserAdminResponse(**response)
+            if response:
+                with contextlib.suppress(Exception):
+                    await repository.upsert_users([response], get_db_path())
+            return UserAdminResponse(**response) if response else None
+        except OfflineError:
+            await enqueue(
+                "user",
+                "POST",
+                f"/admin/users/{user_id}/hire",
+                entity_id=str(user_id),
+                db_path=get_db_path(),
+            )
+            return None
         except Exception:
             return None
 
     async def terminate_employee(self, user_id: int) -> UserAdminResponse | None:
         try:
             response = await api_client.post(f"/admin/users/{user_id}/terminate")
-            return UserAdminResponse(**response)
+            if response:
+                with contextlib.suppress(Exception):
+                    await repository.upsert_users([response], get_db_path())
+            return UserAdminResponse(**response) if response else None
+        except OfflineError:
+            await enqueue(
+                "user",
+                "POST",
+                f"/admin/users/{user_id}/terminate",
+                entity_id=str(user_id),
+                db_path=get_db_path(),
+            )
+            return None
         except Exception:
             return None
 
@@ -149,7 +279,20 @@ class EmployeesService:
                 f"/admin/users/{user_id}",
                 {"role": role, "active": active, "courier": courier},
             )
-            return UserAdminResponse(**response)
+            if response:
+                with contextlib.suppress(Exception):
+                    await repository.upsert_users([response], get_db_path())
+            return UserAdminResponse(**response) if response else None
+        except OfflineError:
+            await enqueue(
+                "user",
+                "PUT",
+                f"/admin/users/{user_id}",
+                entity_id=str(user_id),
+                request_body={"role": role, "active": active, "courier": courier},
+                db_path=get_db_path(),
+            )
+            return None
         except Exception:
             return None
 
@@ -194,7 +337,10 @@ class EmployeesService:
             )
             return UserAdminResponse(**update_response) if update_response else None
         except Exception as e:
-            print(f"Error creating employee account: {e}")
+            if hasattr(e, "response") and hasattr(e.response, "text"):
+                print(f"Error creating employee account: {e}, body: {e.response.text}")
+            else:
+                print(f"Error creating employee account: {e}")
             return None
 
     def get_offers_sync(self) -> list[JobOfferResponse]:

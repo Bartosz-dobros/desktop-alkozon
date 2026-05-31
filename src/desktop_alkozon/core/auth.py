@@ -1,10 +1,13 @@
+import asyncio
 import time
 
+import bcrypt
 import httpx
 import jwt
 import keyring
 from pydantic import BaseModel, EmailStr, Field
 
+from desktop_alkozon.core.database import get_db
 from desktop_alkozon.models.api_models import TokenResponse
 from desktop_alkozon.services.api_client import api_client
 
@@ -37,6 +40,7 @@ class AuthService:
         self._api_unavailable = False
         self._demo_mode = False
         self._pending_challenge = None
+        self._pending_password = None
 
     def _get_stored_token(self) -> str | None:
         return keyring.get_password(self.SERVICE_NAME, "access_token")
@@ -88,6 +92,7 @@ class AuthService:
 
             if response_data.verification_required:
                 self._pending_challenge = response_data.challenge_id
+                self._pending_password = password
                 return False
             if not response_data.tokens:
                 print("Login failed: API returned no tokens.")
@@ -107,6 +112,7 @@ class AuthService:
             self.update_activity()
             self._api_unavailable = False
             self._pending_challenge = None
+            self._store_local_user(email, password, self._current_user["role"])
             return True
 
         except httpx.HTTPStatusError as e:
@@ -160,6 +166,12 @@ class AuthService:
             self.update_activity()
             self._api_unavailable = False
             self._pending_challenge = None
+            password = getattr(self, "_pending_password", None)
+            if password:
+                self._store_local_user(
+                    self._current_user["email"], password, self._current_user["role"]
+                )
+                self._pending_password = None
             return True
 
         except httpx.HTTPStatusError as e:
@@ -242,12 +254,89 @@ class AuthService:
             return True
         return False
 
+    def _store_local_user(self, email: str, password: str, role: str):
+        try:
+            password_hash = bcrypt.hashpw(
+                password.encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
+
+            async def _store():
+                async with get_db() as db:
+                    await db.execute(
+                        """INSERT OR REPLACE INTO local_user
+                           (email, password_hash, role, device_id, last_login)
+                           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                        (email, password_hash, role, self.DEVICE_ID),
+                    )
+
+            task = asyncio.create_task(_store())
+            self._background_tasks = getattr(self, "_background_tasks", set())
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+        except Exception as e:
+            print(f"Failed to store local user: {e}")
+
+    async def _verify_local_user(self, email: str, password: str) -> dict | None:
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT * FROM local_user WHERE email = ?", (email,)
+                )
+                row = await cursor.fetchone()
+            if row and bcrypt.checkpw(
+                password.encode("utf-8"), row["password_hash"].encode("utf-8")
+            ):
+                return {
+                    "id": 0,
+                    "email": row["email"],
+                    "role": row["role"],
+                    "first_name": row["first_name"],
+                    "last_name": row["last_name"],
+                    "_offline": True,
+                }
+        except Exception as e:
+            print(f"Failed to verify local user: {e}")
+        return None
+
+    async def has_local_user(self, email: str) -> bool:
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT 1 FROM local_user WHERE email = ?", (email,)
+                )
+                return await cursor.fetchone() is not None
+        except Exception:
+            return False
+
+    async def login_offline(self, email: str, password: str) -> bool:
+        if self.locked:
+            return False
+        user_data = await self._verify_local_user(email, password)
+        if user_data:
+            self._current_user = user_data
+            self.attempts = 0
+            self._demo_mode = False
+            self._api_unavailable = True
+            self.update_activity()
+            print(f"Offline login successful for {email}")
+            return True
+        self.attempts += 1
+        if self.attempts > self.MAX_ATTEMPTS:
+            self.locked = True
+        return False
+
+    def is_offline_session(self) -> bool:
+        if self._current_user:
+            return self._current_user.get("_offline", False)
+        return False
+
     def logout(self):
         self._clear_tokens()
         self._current_user = None
         self.attempts = 0
         self.locked = False
         self._pending_challenge = None
+        self._demo_mode = False
 
     def is_authenticated(self) -> bool:
         token = self._get_stored_token()

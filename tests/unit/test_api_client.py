@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
+from desktop_alkozon.core.exceptions import OfflineError
 from desktop_alkozon.services.api_client import ApiClient
 
 
@@ -125,7 +126,7 @@ class TestApiClientRequests:
             "Request timed out"
         )
 
-        with pytest.raises(httpx.TimeoutException):
+        with pytest.raises(OfflineError, match="API timeout"):
             await api_client.post("/test", {"key": "value"})
 
     async def test_get_network_error(self, api_client):
@@ -153,3 +154,24 @@ class TestApiClientRequests:
         await api_client.close()
 
         api_client.client.aclose.assert_called_once()
+
+    async def test_health_check_online(self, api_client, mocker):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mocker.patch("httpx.AsyncClient.get", return_value=mock_resp)
+        result = await api_client.health_check()
+        assert result is True
+
+    async def test_health_check_offline(self, api_client, mocker):
+        mocker.patch(
+            "httpx.AsyncClient.get",
+            side_effect=httpx.ConnectError("No connection"),
+        )
+        result = await api_client.health_check()
+        assert result is False
+
+    async def test_connect_error_raises_offline_error(self, api_client):
+        api_client.client = AsyncMock()
+        api_client.client.request.side_effect = httpx.ConnectError("No connection")
+        with pytest.raises(OfflineError):
+            await api_client.get("/test")
