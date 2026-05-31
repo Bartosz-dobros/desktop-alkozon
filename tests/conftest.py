@@ -12,10 +12,19 @@ def mock_keyring_backends(mocker):
     mocker.patch("desktop_alkozon.core.auth.keyring.get_password", return_value=None)
     mocker.patch("desktop_alkozon.core.auth.keyring.set_password")
     mocker.patch("desktop_alkozon.core.auth.keyring.delete_password")
-    mocker.patch(
-        "desktop_alkozon.core.encryption.keyring.get_password", return_value=None
-    )
-    mocker.patch("desktop_alkozon.core.encryption.keyring.set_password")
+
+    async def _noop_encrypt(source_path, dest_path):
+        import shutil
+
+        shutil.copy2(source_path, dest_path)
+
+    async def _noop_decrypt(source_path, dest_path):
+        import shutil
+
+        shutil.copy2(source_path, dest_path)
+
+    mocker.patch("desktop_alkozon.core.database.encrypt_file", _noop_encrypt)
+    mocker.patch("desktop_alkozon.core.database.decrypt_file", _noop_decrypt)
 
 
 @pytest.fixture
