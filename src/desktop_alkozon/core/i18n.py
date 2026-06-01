@@ -11,6 +11,30 @@ TRANSLATIONS = {
         "pl": "Kod weryfikacyjny (4 cyfry)",
         "en": "Verification Code (4 digits)",
     },
+    "login.two_fa_code": {
+        "pl": "Kod 2FA",
+        "en": "2FA Code",
+    },
+    "login.setup_2fa_title": {
+        "pl": "Skonfiguruj kod 2FA",
+        "en": "Set Up 2FA Code",
+    },
+    "login.setup_2fa_instruction": {
+        "pl": "Wprowadź kod weryfikacyjny, który otrzymałeś przy pierwszym logowaniu (e-mail). Będzie wymagany po 2 nieudanych próbach logowania.",
+        "en": "Enter the verification code you received at first login (email). It will be required after 2 failed login attempts.",
+    },
+    "login.setup_2fa_placeholder": {
+        "pl": "Oryginalny kod weryfikacyjny",
+        "en": "Original verification code",
+    },
+    "login.setup_2fa_confirm": {
+        "pl": "POTWIERDŹ",
+        "en": "CONFIRM",
+    },
+    "login.setup_2fa_empty": {
+        "pl": "Wprowadź kod weryfikacyjny",
+        "en": "Please enter your verification code",
+    },
     "login.button": {"pl": "ZALOGUJ", "en": "LOGIN"},
     "login.logging_in": {"pl": "LOGOWANIE...", "en": "LOGGING IN..."},
     "login.enter_code": {"pl": "WPISZ KOD", "en": "ENTER CODE"},
@@ -36,8 +60,8 @@ TRANSLATIONS = {
         "en": "Account locked. Restart the app.",
     },
     "login.invalid_credentials": {
-        "pl": "Nieprawidłowe dane logowania lub kod 2FA. Pozostało prób: {remaining}",
-        "en": "Invalid credentials or 2FA code. Attempts left: {remaining}",
+        "pl": "Nieprawidłowe dane logowania. Pozostało prób: {remaining}",
+        "en": "Invalid login information. Attempts left: {remaining}",
     },
     "menu.logged_in_as": {
         "pl": "Zalogowany jako: {name}",

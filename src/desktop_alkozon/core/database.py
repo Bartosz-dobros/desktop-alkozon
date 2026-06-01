@@ -34,6 +34,23 @@ async def _clear_plain_file_with_retry(path: str):
                 raise
 
 
+MIGRATIONS = [
+    "ALTER TABLE local_user ADD COLUMN two_fa_code TEXT",
+]
+
+
+async def _run_migrations(db_path: str):
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("PRAGMA table_info(local_user)")
+        columns = {row["name"] for row in await cursor.fetchall()}
+        for migration in MIGRATIONS:
+            col_name = migration.split()[-2]
+            if col_name not in columns:
+                await db.execute(migration)
+        await db.commit()
+
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS local_user (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,6 +61,7 @@ CREATE TABLE IF NOT EXISTS local_user (
     last_name TEXT,
     device_id TEXT,
     last_login TIMESTAMP,
+    two_fa_code TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -173,6 +191,7 @@ async def init_db(db_path: str | None = None):
 
         if os.path.exists(enc_path):
             await decrypt_file(enc_path, path)
+            await _run_migrations(path)
             return
 
         if os.path.exists(path):
@@ -195,6 +214,7 @@ async def get_db(db_path: str | None = None):
 
         if os.path.exists(enc_path):
             await decrypt_file(enc_path, path)
+            await _run_migrations(path)
 
         async with aiosqlite.connect(path) as db:
             db.row_factory = aiosqlite.Row

@@ -28,6 +28,7 @@ class StaffLoginResponse(BaseModel):
 
 class AuthService:
     MAX_ATTEMPTS = 5
+    TWO_FA_AFTER_ATTEMPTS = 2
     INACTIVITY_TIMEOUT = 1800
     SERVICE_NAME = "desktop_alkozon"
     DEVICE_ID = "desktop-001"
@@ -41,6 +42,8 @@ class AuthService:
         self._demo_mode = False
         self._pending_challenge = None
         self._pending_password = None
+        self._two_fa_code = None
+        self._two_fa_invalid = False
 
     def _get_stored_token(self) -> str | None:
         return keyring.get_password(self.SERVICE_NAME, "access_token")
@@ -72,6 +75,9 @@ class AuthService:
         if self.locked:
             return False
 
+        if self._two_fa_code is None:
+            self._two_fa_code = await self._load_two_fa_code(email)
+
         self.attempts += 1
         if self.attempts > self.MAX_ATTEMPTS:
             self.locked = True
@@ -97,6 +103,15 @@ class AuthService:
             if not response_data.tokens:
                 print("Login failed: API returned no tokens.")
                 return False
+
+            if (
+                self.attempts > self.TWO_FA_AFTER_ATTEMPTS
+                and self._two_fa_code
+                and (not two_fa_code or not self._verify_two_fa_code(two_fa_code))
+            ):
+                self._two_fa_invalid = True
+                return False
+
             self._store_tokens(
                 response_data.tokens.accessToken, response_data.tokens.refreshToken
             )
@@ -109,6 +124,7 @@ class AuthService:
             }
 
             self.attempts = 0
+            self._two_fa_invalid = False
             self.update_activity()
             self._api_unavailable = False
             self._pending_challenge = None
@@ -163,6 +179,7 @@ class AuthService:
             }
 
             self.attempts = 0
+            self._two_fa_invalid = False
             self.update_activity()
             self._api_unavailable = False
             self._pending_challenge = None
@@ -172,6 +189,9 @@ class AuthService:
                     self._current_user["email"], password, self._current_user["role"]
                 )
                 self._pending_password = None
+            stored_hash = await self._store_two_fa_code(code)
+            if stored_hash:
+                self._two_fa_code = stored_hash
             return True
 
         except httpx.HTTPStatusError as e:
@@ -195,6 +215,63 @@ class AuthService:
                     f"Verification rejected! Status: {e.response.status_code}, Raw response: {e.response.text}"
                 )
                 return False
+
+    async def setup_two_fa_code(self, code: str) -> bool:
+        stored_hash = await self._store_two_fa_code(code)
+        if stored_hash:
+            self._two_fa_code = stored_hash
+            return True
+        return False
+
+    async def _store_two_fa_code(self, code: str) -> str | None:
+        if not self._current_user:
+            return None
+        code_hash = bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
+        try:
+            async with get_db() as db:
+                await db.execute(
+                    "UPDATE local_user SET two_fa_code = ? WHERE email = ?",
+                    (code_hash, self._current_user["email"]),
+                )
+            return code_hash
+        except Exception as e:
+            print(f"Failed to store 2FA code: {e}")
+            return None
+
+    def _verify_two_fa_code(self, code: str) -> bool:
+        if not self._two_fa_code:
+            return False
+        try:
+            return bcrypt.checkpw(
+                code.encode("utf-8"), self._two_fa_code.encode("utf-8")
+            )
+        except Exception:
+            return False
+
+    async def _load_two_fa_code(self, email: str) -> str | None:
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT two_fa_code FROM local_user WHERE email = ?", (email,)
+                )
+                row = await cursor.fetchone()
+                return row["two_fa_code"] if row else None
+        except Exception:
+            return None
+
+    def is_two_fa_required(self) -> bool:
+        return (
+            self.attempts >= self.TWO_FA_AFTER_ATTEMPTS
+            and self._two_fa_code is not None
+        )
+
+    def is_two_fa_invalid(self) -> bool:
+        return self._two_fa_invalid
+
+    def has_two_fa(self) -> bool:
+        return self._two_fa_code is not None
 
     async def request_password_reset(self, email: str) -> tuple[bool, str]:
         try:
@@ -262,11 +339,17 @@ class AuthService:
 
             async def _store():
                 async with get_db() as db:
+                    cursor = await db.execute(
+                        "SELECT two_fa_code FROM local_user WHERE email = ?",
+                        (email,),
+                    )
+                    row = await cursor.fetchone()
+                    existing_code = row["two_fa_code"] if row else None
                     await db.execute(
                         """INSERT OR REPLACE INTO local_user
-                           (email, password_hash, role, device_id, last_login)
-                           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)""",
-                        (email, password_hash, role, self.DEVICE_ID),
+                           (email, password_hash, role, device_id, last_login, two_fa_code)
+                           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)""",
+                        (email, password_hash, role, self.DEVICE_ID, existing_code),
                     )
 
             task = asyncio.create_task(_store())
@@ -308,21 +391,30 @@ class AuthService:
         except Exception:
             return False
 
-    async def login_offline(self, email: str, password: str) -> bool:
+    async def login_offline(
+        self, email: str, password: str, two_fa_code: str | None = None
+    ) -> bool:
         if self.locked:
             return False
+        if self._two_fa_code is None:
+            self._two_fa_code = await self._load_two_fa_code(email)
         user_data = await self._verify_local_user(email, password)
         if user_data:
+            if (
+                self.attempts > self.TWO_FA_AFTER_ATTEMPTS
+                and self._two_fa_code
+                and (not two_fa_code or not self._verify_two_fa_code(two_fa_code))
+            ):
+                self._two_fa_invalid = True
+                return False
             self._current_user = user_data
             self.attempts = 0
+            self._two_fa_invalid = False
             self._demo_mode = False
             self._api_unavailable = True
             self.update_activity()
             print(f"Offline login successful for {email}")
             return True
-        self.attempts += 1
-        if self.attempts > self.MAX_ATTEMPTS:
-            self.locked = True
         return False
 
     def is_offline_session(self) -> bool:
@@ -337,6 +429,8 @@ class AuthService:
         self.locked = False
         self._pending_challenge = None
         self._demo_mode = False
+        self._two_fa_code = None
+        self._two_fa_invalid = False
 
     def is_authenticated(self) -> bool:
         token = self._get_stored_token()
@@ -372,6 +466,7 @@ class AuthService:
     def unlock(self):
         self.locked = False
         self.attempts = 0
+        self._two_fa_invalid = False
 
     def get_current_user(self) -> dict | None:
         return self._current_user

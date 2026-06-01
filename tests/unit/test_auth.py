@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
+import bcrypt
 import pytest
 
 from desktop_alkozon.core.auth import AuthService, LoginCredentials
@@ -10,6 +11,9 @@ def auth_service(mocker):
     mocker.patch("desktop_alkozon.core.auth.keyring.get_password", return_value=None)
     mocker.patch("desktop_alkozon.core.auth.keyring.set_password")
     mocker.patch("desktop_alkozon.core.auth.keyring.delete_password")
+    mocker.patch.object(
+        AuthService, "_load_two_fa_code", new=AsyncMock(return_value=None)
+    )
     return AuthService()
 
 
@@ -269,3 +273,260 @@ class TestAuthOffline:
 
         result = asyncio.run(auth_service.login("a@b.com", "pass"))
         assert result is True
+
+
+class TestTwoFA:
+    def test_has_two_fa_no_code(self, auth_service):
+        assert auth_service.has_two_fa() is False
+
+    def test_has_two_fa_with_code(self, auth_service):
+        auth_service._two_fa_code = "$2b$12$somehash"
+        assert auth_service.has_two_fa() is True
+
+    def test_is_two_fa_required_below_threshold(self, auth_service):
+        auth_service._two_fa_code = "$2b$12$somehash"
+        auth_service.attempts = 1
+        assert auth_service.is_two_fa_required() is False
+        auth_service.attempts = 2
+        assert auth_service.is_two_fa_required() is True
+
+    def test_is_two_fa_required_above_threshold(self, auth_service):
+        auth_service._two_fa_code = "$2b$12$somehash"
+        auth_service.attempts = 3
+        assert auth_service.is_two_fa_required() is True
+        auth_service.attempts = 5
+        assert auth_service.is_two_fa_required() is True
+
+    def test_is_two_fa_required_no_code(self, auth_service):
+        auth_service.attempts = 3
+        assert auth_service.is_two_fa_required() is False
+
+    def test_is_two_fa_invalid_default(self, auth_service):
+        assert auth_service.is_two_fa_invalid() is False
+
+    def test_is_two_fa_invalid_set(self, auth_service):
+        auth_service._two_fa_invalid = True
+        assert auth_service.is_two_fa_invalid() is True
+
+    def test_logout_clears_two_fa(self, auth_service):
+        auth_service._two_fa_code = "$2b$12$somehash"
+        auth_service._two_fa_invalid = True
+        auth_service.logout()
+        assert auth_service._two_fa_code is None
+        assert auth_service._two_fa_invalid is False
+
+    def test_unlock_clears_two_fa_invalid(self, auth_service):
+        auth_service._two_fa_invalid = True
+        auth_service.unlock()
+        assert auth_service._two_fa_invalid is False
+
+    def test_verify_two_fa_code_correct(self, auth_service):
+        code = "1234"
+        code_hash = bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
+        auth_service._two_fa_code = code_hash
+        assert auth_service._verify_two_fa_code(code) is True
+
+    def test_verify_two_fa_code_wrong(self, auth_service):
+        code = "1234"
+        code_hash = bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
+        auth_service._two_fa_code = code_hash
+        assert auth_service._verify_two_fa_code("5678") is False
+
+    def test_verify_two_fa_code_no_code(self, auth_service):
+        assert auth_service._verify_two_fa_code("1234") is False
+
+    @pytest.mark.asyncio
+    async def test_login_with_two_fa_required_and_correct(self, auth_service, mocker):
+        mocker.patch.object(
+            auth_service, "_load_two_fa_code", new=AsyncMock(return_value=None)
+        )
+        code = "1234"
+        code_hash = bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
+        auth_service._two_fa_code = code_hash
+        auth_service.attempts = auth_service.TWO_FA_AFTER_ATTEMPTS + 1
+
+        mocker.patch.object(auth_service, "_store_local_user")
+        mocker.patch.object(
+            auth_service,
+            "_decode_jwt",
+            return_value={"sub": "1", "email": "a@b.com", "role": "MANAGER"},
+        )
+        token_response = MagicMock()
+        token_response.accessToken = "tok"
+        token_response.refreshToken = "ref"
+        response_data = MagicMock(spec=["verification_required", "tokens"])
+        response_data.verification_required = False
+        response_data.tokens = token_response
+        mocker.patch(
+            "desktop_alkozon.core.auth.StaffLoginResponse", return_value=response_data
+        )
+        api_client_mock = mocker.patch("desktop_alkozon.core.auth.api_client")
+        api_client_mock.post = AsyncMock(
+            return_value={"accessToken": "tok", "refreshToken": "ref"}
+        )
+
+        result = await auth_service.login("a@b.com", "pass", two_fa_code=code)
+        assert result is True
+        assert auth_service.attempts == 0
+        assert auth_service._two_fa_invalid is False
+
+    @pytest.mark.asyncio
+    async def test_login_with_two_fa_required_and_wrong(self, auth_service, mocker):
+        mocker.patch.object(
+            auth_service, "_load_two_fa_code", new=AsyncMock(return_value=None)
+        )
+        code = "1234"
+        code_hash = bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
+        auth_service._two_fa_code = code_hash
+        auth_service.attempts = auth_service.TWO_FA_AFTER_ATTEMPTS + 1
+
+        mocker.patch.object(
+            auth_service,
+            "_decode_jwt",
+            return_value={"sub": "1", "email": "a@b.com", "role": "MANAGER"},
+        )
+        token_response = MagicMock()
+        token_response.accessToken = "tok"
+        token_response.refreshToken = "ref"
+        response_data = MagicMock(spec=["verification_required", "tokens"])
+        response_data.verification_required = False
+        response_data.tokens = token_response
+        mocker.patch(
+            "desktop_alkozon.core.auth.StaffLoginResponse", return_value=response_data
+        )
+        api_client_mock = mocker.patch("desktop_alkozon.core.auth.api_client")
+        api_client_mock.post = AsyncMock(
+            return_value={"accessToken": "tok", "refreshToken": "ref"}
+        )
+
+        result = await auth_service.login("a@b.com", "pass", two_fa_code="wrong")
+        assert result is False
+        assert auth_service.is_two_fa_invalid() is True
+
+    @pytest.mark.asyncio
+    async def test_login_two_fa_not_required_below_threshold(
+        self, auth_service, mocker
+    ):
+        mocker.patch.object(
+            auth_service, "_load_two_fa_code", new=AsyncMock(return_value=None)
+        )
+        code = "1234"
+        code_hash = bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
+        auth_service._two_fa_code = code_hash
+        auth_service.attempts = 1
+
+        mocker.patch.object(auth_service, "_store_local_user")
+        mocker.patch.object(
+            auth_service,
+            "_decode_jwt",
+            return_value={"sub": "1", "email": "a@b.com", "role": "MANAGER"},
+        )
+        token_response = MagicMock()
+        token_response.accessToken = "tok"
+        token_response.refreshToken = "ref"
+        response_data = MagicMock(spec=["verification_required", "tokens"])
+        response_data.verification_required = False
+        response_data.tokens = token_response
+        mocker.patch(
+            "desktop_alkozon.core.auth.StaffLoginResponse", return_value=response_data
+        )
+        api_client_mock = mocker.patch("desktop_alkozon.core.auth.api_client")
+        api_client_mock.post = AsyncMock(
+            return_value={"accessToken": "tok", "refreshToken": "ref"}
+        )
+
+        result = await auth_service.login("a@b.com", "pass", two_fa_code="wrong")
+        assert result is True
+        assert auth_service.is_two_fa_invalid() is False
+
+    @pytest.mark.asyncio
+    async def test_login_offline_with_two_fa_required_and_correct(
+        self, auth_service, mocker
+    ):
+        mocker.patch.object(
+            auth_service,
+            "_verify_local_user",
+            return_value={
+                "email": "test@test.com",
+                "role": "MANAGER",
+                "_offline": True,
+            },
+        )
+        mocker.patch.object(
+            auth_service, "_load_two_fa_code", new=AsyncMock(return_value=None)
+        )
+        code = "1234"
+        code_hash = bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
+        auth_service._two_fa_code = code_hash
+        auth_service.attempts = 3
+
+        result = await auth_service.login_offline(
+            "test@test.com", "pass", two_fa_code=code
+        )
+        assert result is True
+        assert auth_service.attempts == 0
+        assert auth_service._two_fa_invalid is False
+
+    @pytest.mark.asyncio
+    async def test_login_offline_with_two_fa_required_and_wrong(
+        self, auth_service, mocker
+    ):
+        mocker.patch.object(
+            auth_service,
+            "_verify_local_user",
+            return_value={
+                "email": "test@test.com",
+                "role": "MANAGER",
+                "_offline": True,
+            },
+        )
+        mocker.patch.object(
+            auth_service, "_load_two_fa_code", new=AsyncMock(return_value=None)
+        )
+        code = "1234"
+        code_hash = bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
+        auth_service._two_fa_code = code_hash
+        auth_service.attempts = 3
+
+        result = await auth_service.login_offline(
+            "test@test.com", "pass", two_fa_code="wrong"
+        )
+        assert result is False
+        assert auth_service.is_two_fa_invalid() is True
+
+    @pytest.mark.asyncio
+    async def test_login_offline_two_fa_not_required_below_threshold(
+        self, auth_service, mocker
+    ):
+        mocker.patch.object(
+            auth_service,
+            "_verify_local_user",
+            return_value={
+                "email": "test@test.com",
+                "role": "MANAGER",
+                "_offline": True,
+            },
+        )
+        mocker.patch.object(
+            auth_service, "_load_two_fa_code", new=AsyncMock(return_value=None)
+        )
+        auth_service._two_fa_code = "$2b$12$somehash"
+        auth_service.attempts = 1
+
+        result = await auth_service.login_offline("test@test.com", "pass")
+        assert result is True
+        assert auth_service.is_two_fa_invalid() is False

@@ -68,18 +68,29 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         login_button.disabled = True
         login_button.content = ft.Text(i18n.t("login.logging_in"))
         status_text.visible = False
-        page.update()
+
+        two_fa_value = verification_field.value or ""
+
+        if auth_service._two_fa_code is None:
+            await auth_service._load_two_fa_code(username_field.value or "")
+
+        if auth_service.is_two_fa_required() and not verification_required[0]:
+            verification_field.visible = True
+            verification_field.label = i18n.t("login.two_fa_code")
+            page.update()
 
         if not verification_required[0]:
             success = await auth_service.login(
                 username_field.value or "",
                 password_field.value or "",
+                two_fa_value if auth_service.is_two_fa_required() else None,
             )
 
             if not success and auth_service.get_pending_challenge():
                 verification_required[0] = True
                 challenge_id[0] = auth_service.get_pending_challenge()
                 verification_field.visible = True
+                verification_field.label = i18n.t("login.verification_code")
                 loading[0] = False
                 login_button.disabled = False
                 login_button.content = ft.Text(i18n.t("login.enter_code"))
@@ -90,8 +101,20 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
 
             if success:
                 loading[0] = False
-                page.clean()
-                page.add(create_main_menu_view(page))
+                verification_required[0] = False
+                challenge_id[0] = None
+                await _after_login_success(page)
+                return
+
+            if auth_service.is_two_fa_invalid():
+                loading[0] = False
+                login_button.disabled = False
+                login_button.content = ft.Text(i18n.t("login.button"))
+                remaining = max(0, 5 - auth_service.attempts)
+                status_text.value = i18n.t(
+                    "login.invalid_credentials", remaining=remaining
+                )
+                status_text.visible = True
                 page.update()
                 return
 
@@ -99,27 +122,26 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
                 offline_success = await auth_service.login_offline(
                     username_field.value or "",
                     password_field.value or "",
+                    two_fa_value if auth_service.is_two_fa_required() else None,
                 )
                 if offline_success:
                     loading[0] = False
-                    page.clean()
-                    page.add(create_main_menu_view(page))
-                    page.update()
+                    verification_required[0] = False
+                    challenge_id[0] = None
+                    await _after_login_success(page)
                     return
 
         if verification_required[0]:
             success = await auth_service.verify_staff_login(
                 challenge_id[0] or "",
-                verification_field.value or "",
+                two_fa_value,
             )
 
             if success:
                 loading[0] = False
                 verification_required[0] = False
                 challenge_id[0] = None
-                page.clean()
-                page.add(create_main_menu_view(page))
-                page.update()
+                await _after_login_success(page)
                 return
 
         loading[0] = False
@@ -150,6 +172,97 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
         page.update()
 
     login_button.on_click = login_clicked
+
+    def show_two_fa_setup_dialog(page: ft.Page):
+        code_field = ft.TextField(
+            label=i18n.t("login.setup_2fa_placeholder"),
+            width=400,
+            border_radius=8,
+            password=True,
+            can_reveal_password=True,
+            max_length=6,
+            input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$"),
+            keyboard_type=ft.KeyboardType.NUMBER,
+            text_size=16,
+        )
+        status_text_2fa = ft.Text("", size=14, visible=False)
+        confirm_btn = ft.ElevatedButton(
+            content=ft.Text(i18n.t("login.setup_2fa_confirm")),
+            width=400,
+            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+        )
+
+        async def confirm_clicked(e):
+            code = (code_field.value or "").strip()
+            if not code:
+                status_text_2fa.value = i18n.t("login.setup_2fa_empty")
+                status_text_2fa.color = ft.Colors.RED
+                status_text_2fa.visible = True
+                page.update()
+                return
+            confirm_btn.disabled = True
+            confirm_btn.content = ft.Text(i18n.t("login.logging_in"))
+            status_text_2fa.visible = False
+            page.update()
+            success = await auth_service.setup_two_fa_code(code)
+            if success:
+                dlg.open = False
+                page.clean()
+                page.add(create_main_menu_view(page))
+                page.update()
+            else:
+                status_text_2fa.value = i18n.t("login.connection_error")
+                status_text_2fa.color = ft.Colors.RED
+                status_text_2fa.visible = True
+                confirm_btn.disabled = False
+                confirm_btn.content = ft.Text(i18n.t("login.setup_2fa_confirm"))
+                page.update()
+
+        confirm_btn.on_click = confirm_clicked
+
+        def close_dlg(e=None):
+            dlg.open = False
+            page.update()
+
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(
+                i18n.t("login.setup_2fa_title"),
+                size=20,
+                weight=ft.FontWeight.BOLD,
+            ),
+            content=ft.Column(
+                controls=[
+                    ft.Text(i18n.t("login.setup_2fa_instruction"), size=14),
+                    code_field,
+                    status_text_2fa,
+                    confirm_btn,
+                ],
+                spacing=15,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                width=450,
+            ),
+            actions=[
+                ft.TextButton(
+                    i18n.t("password_reset.cancel"),
+                    on_click=close_dlg,
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        page.overlay.append(dlg)
+        dlg.open = True
+        page.update()
+
+    async def _after_login_success(page: ft.Page):
+        if not auth_service.has_two_fa():
+            verification_field.visible = False
+            show_two_fa_setup_dialog(page)
+        else:
+            page.clean()
+            page.add(create_main_menu_view(page))
+            page.update()
 
     inner_controls = [
         ft.Text("AlkozOn Desktop", size=32, weight=ft.FontWeight.BOLD),
