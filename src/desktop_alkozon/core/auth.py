@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import os
 import time
 
 import bcrypt
@@ -32,6 +34,7 @@ class AuthService:
     INACTIVITY_TIMEOUT = 1800
     SERVICE_NAME = "desktop_alkozon"
     DEVICE_ID = "desktop-001"
+    LOCKOUT_SECURITY_CODE_HASH: str | None = None
 
     def __init__(self):
         self.attempts = 0
@@ -81,6 +84,7 @@ class AuthService:
         self.attempts += 1
         if self.attempts > self.MAX_ATTEMPTS:
             self.locked = True
+            await self._set_hard_lock(True)
             return False
 
         try:
@@ -325,6 +329,40 @@ class AuthService:
     def is_locked(self) -> bool:
         return self.locked
 
+    async def _is_hard_locked(self) -> bool:
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT value FROM app_config WHERE key = 'hard_locked'"
+                )
+                row = await cursor.fetchone()
+                return row is not None and row["value"] == "1"
+        except Exception:
+            return False
+
+    async def _set_hard_lock(self, locked: bool):
+        try:
+            async with get_db() as db:
+                await db.execute(
+                    "INSERT OR REPLACE INTO app_config (key, value) VALUES ('hard_locked', ?)",
+                    (("1" if locked else "0"),),
+                )
+        except Exception as e:
+            print(f"Failed to set hard lock: {e}")
+
+    async def is_hard_locked(self) -> bool:
+        return await self._is_hard_locked()
+
+    async def attempt_hard_unlock(self, code: str) -> bool:
+        if self.LOCKOUT_SECURITY_CODE_HASH is None:
+            return False
+        if hashlib.sha256(code.encode()).hexdigest() == self.LOCKOUT_SECURITY_CODE_HASH:
+            await self._set_hard_lock(False)
+            self.locked = False
+            self.attempts = 0
+            return True
+        return False
+
     async def check_inactivity(self, page):
         if time.time() - self.last_activity > self.INACTIVITY_TIMEOUT:
             self._clear_tokens()
@@ -474,5 +512,19 @@ class AuthService:
     def get_pending_challenge(self) -> str | None:
         return self._pending_challenge
 
+
+try:
+    from desktop_alkozon._build_config import LOCKOUT_SECURITY_CODE_HASH  # type: ignore
+
+    AuthService.LOCKOUT_SECURITY_CODE_HASH = LOCKOUT_SECURITY_CODE_HASH
+except ImportError:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    _dev_code = os.environ.get("LOCKOUT_CODE")
+    if _dev_code:
+        AuthService.LOCKOUT_SECURITY_CODE_HASH = hashlib.sha256(
+            _dev_code.encode()
+        ).hexdigest()
 
 auth_service = AuthService()

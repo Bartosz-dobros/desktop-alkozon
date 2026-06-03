@@ -36,6 +36,7 @@ async def _clear_plain_file_with_retry(path: str):
 
 MIGRATIONS = [
     "ALTER TABLE local_user ADD COLUMN two_fa_code TEXT",
+    "CREATE TABLE IF NOT EXISTS app_config (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
 ]
 
 
@@ -159,6 +160,11 @@ CREATE TABLE IF NOT EXISTS outbox (
     status TEXT DEFAULT 'pending',
     error_message TEXT,
     completed_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS app_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 """
 

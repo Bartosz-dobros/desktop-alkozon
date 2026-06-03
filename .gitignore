@@ -34,5 +34,8 @@ Thumbs.db
 # Local config
 .env.local
 
+# Generated build config
+src/desktop_alkozon/_build_config.py
+
 #Files
 swaggerdata.json

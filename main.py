@@ -1,11 +1,25 @@
 import asyncio
+import logging
+import sys
 
 import flet as ft
 
 from desktop_alkozon.core.auth import auth_service
 from desktop_alkozon.core.database import init_db
 from desktop_alkozon.core.logger import setup_logger
-from desktop_alkozon.ui.pages.login_page import create_login_page_view
+from desktop_alkozon.ui.pages.login_page import (
+    create_hard_lockout_view,
+    create_login_page_view,
+)
+
+logger = logging.getLogger("desktop_alkozon")
+
+
+def excepthook(exc_type, exc_value, exc_tb):
+    logger.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_tb))
+
+
+sys.excepthook = excepthook
 
 
 def main(page: ft.Page):
@@ -18,11 +32,17 @@ def main(page: ft.Page):
     page.window_min_width = 800
     page.window_min_height = 600
 
-    page.run_task(init_db)
-
-    page.add(create_login_page_view(page))
-
     setup_logger()
+
+    async def start_app():
+        await init_db()
+        if await auth_service.is_hard_locked():
+            page.add(create_hard_lockout_view(page))
+        else:
+            page.add(create_login_page_view(page))
+        page.update()
+
+    page.run_task(start_app)
 
     async def inactivity_checker():
         while True:

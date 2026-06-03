@@ -1,3 +1,4 @@
+import hashlib
 from unittest.mock import AsyncMock, MagicMock
 
 import bcrypt
@@ -530,3 +531,181 @@ class TestTwoFA:
         result = await auth_service.login_offline("test@test.com", "pass")
         assert result is True
         assert auth_service.is_two_fa_invalid() is False
+
+
+class TestHardLockout:
+    _TEST_CODE_HASH = hashlib.sha256(b"1595").hexdigest()
+
+    @pytest.mark.asyncio
+    async def test_attempt_hard_unlock_not_configured(self, auth_service, mocker):
+        auth_service.LOCKOUT_SECURITY_CODE_HASH = None
+        auth_service.locked = True
+        auth_service.attempts = 5
+        success = await auth_service.attempt_hard_unlock("1595")
+        assert success is False
+        assert auth_service.locked is True
+
+    @pytest.mark.asyncio
+    async def test_attempt_hard_unlock_correct_code(self, auth_service, mocker):
+        mocker.patch.object(auth_service, "_set_hard_lock", new=AsyncMock())
+        auth_service.LOCKOUT_SECURITY_CODE_HASH = self._TEST_CODE_HASH
+        auth_service.locked = True
+        auth_service.attempts = 5
+
+        success = await auth_service.attempt_hard_unlock("1595")
+        assert success is True
+        assert auth_service.locked is False
+        assert auth_service.attempts == 0
+
+    @pytest.mark.asyncio
+    async def test_attempt_hard_unlock_wrong_code(self, auth_service, mocker):
+        mocker.patch.object(auth_service, "_set_hard_lock", new=AsyncMock())
+        auth_service.LOCKOUT_SECURITY_CODE_HASH = self._TEST_CODE_HASH
+        auth_service.locked = True
+        auth_service.attempts = 5
+
+        success = await auth_service.attempt_hard_unlock("0000")
+        assert success is False
+        assert auth_service.locked is True
+        assert auth_service.attempts == 5
+
+    @pytest.mark.asyncio
+    async def test_attempt_hard_unlock_empty_code(self, auth_service, mocker):
+        mocker.patch.object(auth_service, "_set_hard_lock", new=AsyncMock())
+        auth_service.LOCKOUT_SECURITY_CODE_HASH = self._TEST_CODE_HASH
+        success = await auth_service.attempt_hard_unlock("")
+        assert success is False
+
+    @pytest.mark.asyncio
+    async def test_is_hard_locked_no_db(self, auth_service, mocker):
+        mocker.patch(
+            "desktop_alkozon.core.auth.get_db",
+            side_effect=Exception("DB error"),
+        )
+        result = await auth_service._is_hard_locked()
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_is_hard_locked_false(self, auth_service, mocker):
+        fake_cursor = MagicMock()
+        fake_cursor.fetchone = AsyncMock(return_value=None)
+        fake_db = AsyncMock()
+        fake_db.__aenter__ = AsyncMock(return_value=fake_db)
+        fake_db.__aexit__ = AsyncMock(return_value=None)
+        fake_db.execute = AsyncMock(return_value=fake_cursor)
+        mocker.patch(
+            "desktop_alkozon.core.auth.get_db",
+            return_value=fake_db,
+        )
+        result = await auth_service._is_hard_locked()
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_is_hard_locked_true(self, auth_service, mocker):
+        fake_row = MagicMock()
+        fake_row.__getitem__.return_value = "1"
+        fake_cursor = MagicMock()
+        fake_cursor.fetchone = AsyncMock(return_value=fake_row)
+        fake_db = AsyncMock()
+        fake_db.__aenter__ = AsyncMock(return_value=fake_db)
+        fake_db.__aexit__ = AsyncMock(return_value=None)
+        fake_db.execute = AsyncMock(return_value=fake_cursor)
+        mocker.patch(
+            "desktop_alkozon.core.auth.get_db",
+            return_value=fake_db,
+        )
+        result = await auth_service._is_hard_locked()
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_set_hard_lock_writes_db(self, auth_service, mocker):
+        fake_db = AsyncMock()
+        fake_db.__aenter__ = AsyncMock(return_value=fake_db)
+        fake_db.__aexit__ = AsyncMock(return_value=None)
+        fake_db.execute = AsyncMock()
+        mocker.patch(
+            "desktop_alkozon.core.auth.get_db",
+            return_value=fake_db,
+        )
+        await auth_service._set_hard_lock(True)
+        fake_db.execute.assert_called_once_with(
+            "INSERT OR REPLACE INTO app_config (key, value) VALUES ('hard_locked', ?)",
+            ("1",),
+        )
+
+    @pytest.mark.asyncio
+    async def test_login_triggers_hard_lockout_after_max_attempts(
+        self, auth_service, mocker
+    ):
+        set_hard_lock_mock = mocker.patch.object(
+            auth_service, "_set_hard_lock", new=AsyncMock()
+        )
+        mocker.patch.object(
+            auth_service, "_load_two_fa_code", new=AsyncMock(return_value=None)
+        )
+        mocker.patch(
+            "desktop_alkozon.core.auth.api_client.post",
+            AsyncMock(side_effect=Exception("API error")),
+        )
+
+        auth_service.attempts = 0
+        auth_service.locked = False
+
+        for _ in range(AuthService.MAX_ATTEMPTS + 1):
+            await auth_service.login("test@test.com", "wrong")
+
+        assert auth_service.locked is True
+        set_hard_lock_mock.assert_called_once_with(True)
+
+    @pytest.mark.asyncio
+    async def test_hard_unlock_clears_db_lock(self, auth_service, mocker):
+        set_hard_lock_mock = mocker.patch.object(
+            auth_service, "_set_hard_lock", new=AsyncMock()
+        )
+        auth_service.LOCKOUT_SECURITY_CODE_HASH = self._TEST_CODE_HASH
+        auth_service.locked = True
+        auth_service.attempts = 5
+
+        success = await auth_service.attempt_hard_unlock("1595")
+        assert success is True
+        set_hard_lock_mock.assert_called_once_with(False)
+
+    @pytest.mark.asyncio
+    async def test_hard_lock_persists_after_logout(self, auth_service, mocker):
+        mocker.patch.object(auth_service, "_set_hard_lock", new=AsyncMock())
+        mocker.patch.object(auth_service, "_clear_tokens")
+        auth_service.locked = True
+        auth_service.attempts = 5
+        auth_service._current_user = {"email": "test@test.com"}
+
+        auth_service.logout()
+        assert auth_service.locked is False
+        assert auth_service.attempts == 0
+        auth_service._set_hard_lock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_login_offline_respects_lockout(self, auth_service, mocker):
+        mocker.patch.object(
+            auth_service, "_load_two_fa_code", new=AsyncMock(return_value=None)
+        )
+        mocker.patch.object(auth_service, "_verify_local_user", return_value=None)
+        auth_service.locked = True
+
+        result = await auth_service.login_offline("test@test.com", "wrong")
+        assert result is False
+        assert auth_service.locked is True
+
+    @pytest.mark.asyncio
+    async def test_login_offline_does_not_track_attempts(self, auth_service, mocker):
+        mocker.patch.object(
+            auth_service, "_load_two_fa_code", new=AsyncMock(return_value=None)
+        )
+        mocker.patch.object(auth_service, "_verify_local_user", return_value=None)
+        auth_service.attempts = 0
+        auth_service.locked = False
+
+        for _ in range(AuthService.MAX_ATTEMPTS + 1):
+            await auth_service.login_offline("test@test.com", "wrong")
+
+        assert auth_service.locked is False
+        assert auth_service.attempts == 0

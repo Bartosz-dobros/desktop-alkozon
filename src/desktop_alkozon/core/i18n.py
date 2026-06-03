@@ -451,6 +451,30 @@ TRANSLATIONS = {
         "pl": "Zapisano offline - zostanie wyslane po przywroceniu polaczenia",
         "en": "Saved offline - will sync when connection is restored",
     },
+    "lockout.title": {
+        "pl": "Konto zablokowane",
+        "en": "Account Locked",
+    },
+    "lockout.message": {
+        "pl": "Nie udało się zweryfikować danych logowania. Skontaktuj się z działem IT lub wprowadź kod zabezpieczający.",
+        "en": "Failed to verify credentials. Contact IT team or enter the security code.",
+    },
+    "lockout.code_label": {
+        "pl": "Kod zabezpieczający",
+        "en": "Security Code",
+    },
+    "lockout.unlock_button": {
+        "pl": "ODBLOKUJ",
+        "en": "UNLOCK",
+    },
+    "lockout.invalid_code": {
+        "pl": "Nieprawidłowy kod zabezpieczający. Spróbuj ponownie.",
+        "en": "Invalid security code. Try again.",
+    },
+    "lockout.unlocked": {
+        "pl": "Konto odblokowane. Zaloguj się.",
+        "en": "Account unlocked. Please log in.",
+    },
 }
 
 

@@ -15,6 +15,109 @@ from desktop_alkozon.ui.components.settings_drawer import (
 )
 
 
+def create_hard_lockout_view(page: ft.Page) -> ft.Stack:
+    page._rebuild_view = lambda: create_hard_lockout_view(page)
+    setup_theme(page)
+    page.drawer = make_settings_drawer(page)
+
+    code_field = ft.TextField(
+        label=i18n.t("lockout.code_label"),
+        width=400,
+        border_radius=8,
+        password=True,
+        can_reveal_password=True,
+        max_length=10,
+        input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$"),
+        keyboard_type=ft.KeyboardType.NUMBER,
+        text_size=16,
+    )
+    status_text = ft.Text("", size=14, visible=False)
+    unlock_button = ft.ElevatedButton(
+        content=ft.Text(i18n.t("lockout.unlock_button")),
+        width=400,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+    )
+
+    async def unlock_clicked(e):
+        code = (code_field.value or "").strip()
+        if not code:
+            status_text.value = i18n.t("lockout.invalid_code")
+            status_text.color = ft.Colors.RED
+            status_text.visible = True
+            page.update()
+            return
+
+        unlock_button.disabled = True
+        unlock_button.content = ft.Text(i18n.t("login.logging_in"))
+        status_text.visible = False
+        page.update()
+
+        success = await auth_service.attempt_hard_unlock(code)
+        if success:
+            status_text.value = i18n.t("lockout.unlocked")
+            status_text.color = ft.Colors.GREEN
+            status_text.visible = True
+            unlock_button.visible = False
+            code_field.disabled = True
+            page.update()
+            await asyncio.sleep(1.5)
+            page.clean()
+            page.add(create_login_page_view(page))
+            page.update()
+        else:
+            status_text.value = i18n.t("lockout.invalid_code")
+            status_text.color = ft.Colors.RED
+            status_text.visible = True
+            unlock_button.disabled = False
+            unlock_button.content = ft.Text(i18n.t("lockout.unlock_button"))
+            page.update()
+
+    unlock_button.on_click = unlock_clicked
+
+    return ft.Stack(
+        controls=[
+            ft.Container(
+                expand=True,
+                padding=40,
+                alignment=ft.Alignment(0.5, 0.5),
+                content=ft.Column(
+                    controls=[
+                        ft.Icon(
+                            ft.Icons.LOCK_OUTLINE, size=64, color=ft.Colors.RED_400
+                        ),
+                        ft.Text(
+                            i18n.t("lockout.title"),
+                            size=28,
+                            weight=ft.FontWeight.BOLD,
+                        ),
+                        ft.Container(
+                            content=ft.Text(
+                                i18n.t("lockout.message"),
+                                size=14,
+                                text_align=ft.TextAlign.CENTER,
+                            ),
+                            width=500,
+                        ),
+                        ft.Divider(),
+                        code_field,
+                        status_text,
+                        unlock_button,
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=20,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            ),
+            ft.Container(
+                content=make_hamburger_button(page),
+                left=12,
+                top=12,
+            ),
+        ],
+        expand=True,
+    )
+
+
 def create_login_page_view(page: ft.Page) -> ft.Container:
     page._rebuild_view = lambda: create_login_page_view(page)
 
@@ -155,9 +258,10 @@ def create_login_page_view(page: ft.Page) -> ft.Container:
                 status_text.value = i18n.t("offline.login_no_user")
             status_text.visible = True
         elif auth_service.is_locked():
-            status_text.value = i18n.t("login.account_locked")
-            status_text.visible = True
-            login_button.disabled = True
+            page.clean()
+            page.add(create_hard_lockout_view(page))
+            page.update()
+            return
         else:
             remaining = max(0, 5 - auth_service.attempts)
             status_text.value = i18n.t("login.invalid_credentials", remaining=remaining)
