@@ -249,9 +249,11 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
 
     controller = WarehouseController()
     orders: list = []
+    _products: list = []
+    _highest_id = 0
     loading = ft.ProgressRing(visible=True)
 
-    order_table = ft.DataTable(
+    pending_table = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text(i18n.t("warehouse.orders.table.id"))),
             ft.DataColumn(ft.Text(i18n.t("warehouse.orders.table.status"))),
@@ -262,11 +264,26 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
         ],
         rows=[],
     )
+    received_table = ft.DataTable(
+        columns=[
+            ft.DataColumn(ft.Text(i18n.t("warehouse.orders.table.id"))),
+            ft.DataColumn(ft.Text(i18n.t("warehouse.orders.table.status"))),
+            ft.DataColumn(ft.Text(i18n.t("warehouse.orders.table.note"))),
+            ft.DataColumn(ft.Text(i18n.t("warehouse.orders.table.date"))),
+            ft.DataColumn(ft.Text(i18n.t("warehouse.orders.table.lines"))),
+            ft.DataColumn(ft.Text(i18n.t("warehouse.orders.table.actions"))),
+        ],
+        rows=[],
+    )
+    pending_count = ft.Text("", size=13)
+    received_count = ft.Text("", size=13)
 
     new_order_btn = ft.ElevatedButton(
         i18n.t("warehouse.orders.new_order_button"),
         icon=ft.Icons.ADD,
-        on_click=lambda e: _open_new_order_dialog(page, controller, load_data),
+        on_click=lambda e: _open_new_order_dialog(
+            page, controller, load_data, _highest_id, _products
+        ),
     )
 
     def format_lines(lines) -> str:
@@ -283,20 +300,27 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
         return "; ".join(parts)
 
     async def load_data():
-        nonlocal orders
+        nonlocal orders, _products, _highest_id
         try:
             loading.visible = True
             page.update()
 
             orders = await controller.get_replenishment_history()
+            _highest_id = max((o.id for o in orders), default=0)
 
-            order_table.rows.clear()
+            _products = await controller.get_products()
+
+            pending_table.rows.clear()
+            received_table.rows.clear()
+            pending_orders = []
+            received_orders = []
             for o in orders:
-                is_received = o.id in RECEIVED_ORDER_IDS or o.status != "PENDING"
+                is_received = o.id in RECEIVED_ORDER_IDS or (
+                    o.status and o.status in ("RECEIVED", "COMPLETED")
+                )
                 lines_text = format_lines(o.lines)
                 created = o.createdAt.strftime("%Y-%m-%d %H:%M") if o.createdAt else "-"
 
-                action_btn = None
                 if is_received:
                     action_btn = ft.Container(
                         content=ft.Text(
@@ -306,6 +330,7 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
                             size=13,
                         ),
                     )
+                    received_orders.append(o)
                 else:
                     action_btn = ft.ElevatedButton(
                         i18n.t("warehouse.orders.mark_received"),
@@ -315,8 +340,10 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
                         height=36,
                         style=ft.ButtonStyle(padding=ft.Padding(8, 4, 8, 4)),
                     )
+                    pending_orders.append(o)
 
-                order_table.rows.append(
+                target = received_table if is_received else pending_table
+                target.rows.append(
                     ft.DataRow(
                         cells=[
                             ft.DataCell(ft.Text(str(o.id))),
@@ -325,8 +352,12 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
                             ft.DataCell(ft.Text(created)),
                             ft.DataCell(
                                 ft.Container(
-                                    content=ft.Text(lines_text, size=12),
-                                    width=200,
+                                    content=ft.Text(
+                                        lines_text,
+                                        size=12,
+                                        max_lines=2,
+                                        overflow=ft.TextOverflow.ELLIPSIS,
+                                    ),
                                 )
                             ),
                             ft.DataCell(
@@ -337,6 +368,9 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
                         ]
                     )
                 )
+
+            pending_count.value = f"{len(pending_orders)} w trakcie"
+            received_count.value = f"{len(received_orders)} odebrane"
 
             loading.visible = False
             page.update()
@@ -355,10 +389,9 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
     return ft.Container(
         expand=True,
         padding=20,
-        content=ft.Column(
+        content=ft.ListView(
             expand=True,
             spacing=15,
-            scroll=ft.ScrollMode.AUTO,
             controls=[
                 ft.Text(
                     i18n.t("warehouse.orders_title"),
@@ -367,7 +400,13 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
                 ),
                 new_order_btn,
                 loading,
-                order_table,
+                ft.Text("W trakcie", size=18, weight=ft.FontWeight.BOLD),
+                pending_count,
+                pending_table,
+                ft.Divider(),
+                ft.Text("Odebrane", size=18, weight=ft.FontWeight.BOLD),
+                received_count,
+                received_table,
                 ft.ElevatedButton(
                     i18n.t("warehouse.back_to_hub"),
                     width=400,
@@ -382,6 +421,8 @@ def _open_new_order_dialog(
     page: ft.Page,
     controller: WarehouseController,
     reload_callback,
+    _highest_id: int = 0,
+    _products: list | None = None,
 ):
     line_rows: list[dict] = []
     lines_container = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO)
@@ -400,11 +441,13 @@ def _open_new_order_dialog(
         for idx, row_data in enumerate(line_rows):
             pid_field = row_data["pid"]
             qty_field = row_data["qty"]
+            pick_btn = row_data["pick_btn"]
 
             line_row = ft.Row(
                 controls=[
                     ft.Text(str(idx + 1) + ".", width=25),
                     pid_field,
+                    pick_btn,
                     qty_field,
                     ft.IconButton(
                         icon=ft.Icons.DELETE,
@@ -424,13 +467,62 @@ def _open_new_order_dialog(
             line_rows.pop(idx)
             rebuild_lines()
 
+    def _show_product_picker(pid_field):
+        def pick_product(e, product_id):
+            pid_field.value = str(product_id)
+            picker_dlg.open = False
+            page.update()
+
+        product_controls = [
+            ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Text(str(p.productId), weight=ft.FontWeight.BOLD, width=40),
+                        ft.Text(p.name, expand=True),
+                    ]
+                ),
+                padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                on_click=lambda _, pid=p.productId: pick_product(_, pid),
+            )
+            for p in (_products or [])
+        ]
+
+        picker_dlg = ft.AlertDialog(
+            title=ft.Text("Wybierz produkt", size=18, weight=ft.FontWeight.BOLD),
+            content=ft.Column(
+                controls=product_controls,
+                scroll=ft.ScrollMode.AUTO,
+                width=400,
+                height=450,
+                spacing=2,
+            ),
+            actions=[
+                ft.TextButton(
+                    "Anuluj",
+                    on_click=lambda e: (
+                        setattr(picker_dlg, "open", False) or page.update()
+                    ),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        page.overlay.append(picker_dlg)
+        picker_dlg.open = True
+        page.update()
+
     def add_line(e):
         pid = ft.TextField(
-            label=i18n.t("warehouse.orders.product_id"),
-            width=120,
+            label="ID",
+            width=80,
             input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$"),
             keyboard_type=ft.KeyboardType.NUMBER,
             text_size=14,
+        )
+        pick_btn = ft.IconButton(
+            icon=ft.Icons.SEARCH,
+            icon_size=20,
+            tooltip="Wybierz produkt",
+            on_click=lambda _, pf=pid: _show_product_picker(pf),
         )
         qty = ft.TextField(
             label=i18n.t("warehouse.orders.quantity_delta"),
@@ -439,7 +531,7 @@ def _open_new_order_dialog(
             keyboard_type=ft.KeyboardType.NUMBER,
             text_size=14,
         )
-        line_rows.append({"pid": pid, "qty": qty})
+        line_rows.append({"pid": pid, "qty": qty, "pick_btn": pick_btn})
         rebuild_lines()
 
     async def submit_order(e):
@@ -505,7 +597,7 @@ def _open_new_order_dialog(
             weight=ft.FontWeight.BOLD,
         ),
         content=ft.Column(
-            width=450,
+            width=550,
             height=400,
             controls=[
                 lines_container,

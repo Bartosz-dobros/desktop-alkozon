@@ -18,18 +18,20 @@ from desktop_alkozon.services.api_client import api_client
 
 
 def _parse_line(data: dict) -> ReplenishmentLine:
-    product_id = None
-    product_name = None
     product = data.get("product")
     if product:
         product_id = product.get("id")
         product_name = product.get("name")
-    raw_material_id = None
-    raw_material_name = None
+    else:
+        product_id = data.get("productId")
+        product_name = data.get("productName")
     raw_material = data.get("rawMaterial")
     if raw_material:
         raw_material_id = raw_material.get("id")
         raw_material_name = raw_material.get("name")
+    else:
+        raw_material_id = data.get("rawMaterialId")
+        raw_material_name = data.get("rawMaterialName")
     return ReplenishmentLine(
         id=data.get("id", 0),
         productId=product_id,
@@ -111,7 +113,15 @@ class WarehouseService:
                         response.get("rawMaterials", []),
                         get_db_path(),
                     )
-            return InventoryOverviewResponse(**response)
+            print(
+                f"[Warehouse] GET /inventory raw: keys={list(response.keys()) if isinstance(response, dict) else type(response).__name__}, "
+                f"rawMaterials count={len(response.get('rawMaterials', [])) if isinstance(response, dict) else 'N/A'}"
+            )
+            parsed = InventoryOverviewResponse(**response)
+            print(
+                f"[Warehouse] GET /inventory parsed: products={len(parsed.products)}, rawMaterials={len(parsed.rawMaterials)}"
+            )
+            return parsed
         except OfflineError:
             db_path = get_db_path()
             products = await repository.get_all_inventory_products(db_path)
@@ -142,7 +152,11 @@ class WarehouseService:
             print(
                 f"[Warehouse] GET /inventory failed: HTTP {code} | {type(e).__name__}: {e}"
             )
+            import traceback
+
+            traceback.print_exc()
             if auth_service.is_demo_mode():
+                print("[Warehouse] Falling back to demo data")
                 return InventoryOverviewResponse(
                     products=[
                         InventoryProductRow(
@@ -202,6 +216,9 @@ class WarehouseService:
             if note:
                 payload["note"] = note
             response = await api_client.post("/warehouse/replenishment", payload)
+            print(
+                f"[Warehouse] POST /warehouse/replenishment response keys={list(response.keys()) if isinstance(response, dict) else type(response).__name__}, status={response.get('status')!r}"
+            )
             try:
                 order = _parse_order(response)
                 _session_cache.insert(0, order)
@@ -358,11 +375,26 @@ class WarehouseService:
         try:
             response = await api_client.get("/warehouse/replenishment")
             if isinstance(response, list):
+                print(
+                    f"[Warehouse] GET /warehouse/replenishment: {len(response)} orders returned"
+                )
+                if response:
+                    sample = response[0]
+                    print(
+                        f"[Warehouse] First order keys: {list(sample.keys())}, lines count: {len(sample.get('lines', []) or [])}"
+                    )
+                    if sample.get("lines"):
+                        print(
+                            f"[Warehouse] First line keys: {list(sample['lines'][0].keys()) if isinstance(sample['lines'][0], dict) else 'not a dict'}"
+                        )
                 orders = [_parse_order(item) for item in response]
                 _session_cache = orders
                 with contextlib.suppress(Exception):
                     await repository.upsert_replenishments(response, get_db_path())
                 return orders
+            print(
+                f"[Warehouse] GET /warehouse/replenishment: unexpected type {type(response).__name__}"
+            )
             return []
         except OfflineError:
             rows = await repository.get_all_replenishments(get_db_path())
