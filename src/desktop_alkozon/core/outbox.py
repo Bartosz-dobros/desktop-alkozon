@@ -146,6 +146,16 @@ async def mark_failed(
         )
 
 
+async def revert_to_pending(outbox_id: str, db_path: str | None = None):
+    async with get_db(db_path) as db:
+        await db.execute(
+            """UPDATE outbox SET status = 'pending',
+               error_message = NULL, retry_count = 0
+               WHERE id = ?""",
+            (outbox_id,),
+        )
+
+
 async def increment_retry(outbox_id: str, db_path: str | None = None):
     async with get_db(db_path) as db:
         await db.execute(

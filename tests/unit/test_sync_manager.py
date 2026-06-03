@@ -229,7 +229,26 @@ class TestSyncManagerOutbox:
         )
         await sync_manager.process_outbox()
         updated = await get_by_id(entry.id, initialized_db)
-        assert updated.status == "failed"
+        assert updated.status == "pending"
+
+    async def test_process_outbox_offline_error(self, initialized_db, mocker):
+        from desktop_alkozon.core.exceptions import OfflineError
+
+        reset_sync_manager()
+        entry = await enqueue(
+            entity_type="test",
+            http_method="POST",
+            endpoint="/test",
+            db_path=initialized_db,
+        )
+        mocker.patch(
+            "desktop_alkozon.core.sync_manager.api_client._request",
+            new_callable=AsyncMock,
+            side_effect=OfflineError("No connection"),
+        )
+        await sync_manager.process_outbox()
+        updated = await get_by_id(entry.id, initialized_db)
+        assert updated.status == "pending"
 
     async def test_process_outbox_emits_events(self, initialized_db, mocker):
         reset_sync_manager()
@@ -261,6 +280,118 @@ class TestSyncManagerOutbox:
         )
         await sync_manager.process_outbox()
         api_mock.assert_not_called()
+
+    async def test_process_outbox_create_employee_success(self, initialized_db, mocker):
+        reset_sync_manager()
+        import base64
+        import json as pyjson
+
+        header = (
+            base64.urlsafe_b64encode(pyjson.dumps({"alg": "HS256"}).encode())
+            .rstrip(b"=")
+            .decode()
+        )
+        payload = (
+            base64.urlsafe_b64encode(
+                pyjson.dumps(
+                    {"sub": 123, "email": "novy@test.com", "role": "CUSTOMER"}
+                ).encode()
+            )
+            .rstrip(b"=")
+            .decode()
+        )
+        fake_access_token = f"{header}.{payload}.fakesig"
+        mock_register_response = {
+            "accessToken": fake_access_token,
+            "refreshToken": "fake_refresh",
+            "tokenType": "Bearer",
+            "expiresInSeconds": 3600,
+        }
+        mock_update_response = {
+            "id": 123,
+            "email": "novy@test.com",
+            "role": "MANAGER",
+            "active": True,
+            "courier": True,
+        }
+
+        entry = await enqueue(
+            entity_type="create_employee",
+            http_method="POST",
+            endpoint="/auth/register",
+            entity_id=None,
+            request_body={
+                "register": {
+                    "email": "novy@test.com",
+                    "password": "StrongPass1!",
+                    "firstName": "Jan",
+                    "lastName": "Kowalski",
+                    "ageConfirmed": True,
+                    "adultConfirmed": True,
+                },
+                "update": {
+                    "role": "MANAGER",
+                    "active": True,
+                    "courier": True,
+                },
+            },
+            db_path=initialized_db,
+        )
+
+        mocker.patch(
+            "desktop_alkozon.core.sync_manager.api_client._request",
+            new_callable=AsyncMock,
+            side_effect=[mock_register_response, mock_update_response],
+        )
+        mocker.patch(
+            "desktop_alkozon.core.sync_manager.api_client.get",
+            new_callable=AsyncMock,
+            return_value=[],
+        )
+
+        await sync_manager.process_outbox()
+
+        updated = await get_by_id(entry.id, initialized_db)
+        assert updated.status == "completed"
+
+    async def test_process_outbox_create_employee_register_fails(
+        self, initialized_db, mocker
+    ):
+        reset_sync_manager()
+        entry = await enqueue(
+            entity_type="create_employee",
+            http_method="POST",
+            endpoint="/auth/register",
+            entity_id=None,
+            request_body={
+                "register": {"email": "novy@test.com", "password": "StrongPass1!"},
+                "update": {"role": "EMPLOYEE", "active": True, "courier": False},
+            },
+            db_path=initialized_db,
+        )
+
+        error_response = httpx.Response(
+            409, request=httpx.Request("POST", "/auth/register")
+        )
+        mocker.patch(
+            "desktop_alkozon.core.sync_manager.api_client._request",
+            new_callable=AsyncMock,
+            side_effect=httpx.HTTPStatusError(
+                "Conflict",
+                request=httpx.Request("POST", "/auth/register"),
+                response=error_response,
+            ),
+        )
+        mocker.patch(
+            "desktop_alkozon.core.sync_manager.api_client.get",
+            new_callable=AsyncMock,
+            return_value=[],
+        )
+
+        await sync_manager.process_outbox()
+
+        updated = await get_by_id(entry.id, initialized_db)
+        assert updated.status == "failed"
 
     async def test_process_outbox_skips_when_syncing(self, initialized_db, mocker):
         reset_sync_manager()

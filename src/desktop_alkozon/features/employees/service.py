@@ -336,6 +336,33 @@ class EmployeesService:
                 },
             )
             return UserAdminResponse(**update_response) if update_response else None
+        except OfflineError:
+            db_path = get_db_path()
+            register_data = {
+                "email": email,
+                "password": password,
+                "firstName": first_name,
+                "lastName": last_name,
+                "ageConfirmed": True,
+                "adultConfirmed": True,
+            }
+            update_data = {
+                "role": role,
+                "active": True,
+                "courier": courier,
+            }
+            await enqueue(
+                "create_employee",
+                "POST",
+                "/auth/register",
+                entity_id=None,
+                request_body={
+                    "register": register_data,
+                    "update": update_data,
+                },
+                db_path=db_path,
+            )
+            return None
         except Exception as e:
             if hasattr(e, "response") and hasattr(e.response, "text"):
                 print(f"Error creating employee account: {e}, body: {e.response.text}")

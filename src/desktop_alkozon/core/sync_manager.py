@@ -3,16 +3,19 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
+import jwt
 
 from desktop_alkozon.core import repository
 from desktop_alkozon.core.auth import auth_service
 from desktop_alkozon.core.connectivity import connectivity_service
 from desktop_alkozon.core.database import get_db_path
+from desktop_alkozon.core.exceptions import OfflineError
 from desktop_alkozon.core.outbox import (
     get_pending,
     mark_completed,
     mark_failed,
     mark_in_progress,
+    revert_to_pending,
 )
 from desktop_alkozon.services.api_client import api_client
 
@@ -158,21 +161,48 @@ class SyncManager:
             await mark_in_progress(entry.id, db_path)
 
             try:
-                body = json.loads(entry.request_body) if entry.request_body else {}
-                response = await api_client._request(
-                    entry.http_method, entry.endpoint, json=body
-                )
-                await mark_completed(
-                    entry.id, json.dumps(response) if response else "{}", db_path
-                )
+                if entry.entity_type == "create_employee":
+                    body = json.loads(entry.request_body) if entry.request_body else {}
+                    register_data = body.get("register", {})
+                    update_data = body.get("update", {})
+                    register_response = await api_client._request(
+                        "POST", "/auth/register", json=register_data
+                    )
+                    access_token = register_response.get("accessToken", "")
+                    if not access_token:
+                        raise Exception("No access token in register response")
+                    claims = jwt.decode(
+                        access_token, options={"verify_signature": False}
+                    )
+                    user_id = int(claims.get("sub", 0))
+                    if not user_id:
+                        raise Exception("No user ID in register response")
+                    update_response = await api_client._request(
+                        "PUT",
+                        f"/admin/users/{user_id}",
+                        json=update_data,
+                    )
+                    await mark_completed(
+                        entry.id,
+                        json.dumps(update_response) if update_response else "{}",
+                        db_path,
+                    )
+                else:
+                    body = json.loads(entry.request_body) if entry.request_body else {}
+                    response = await api_client._request(
+                        entry.http_method, entry.endpoint, json=body
+                    )
+                    await mark_completed(
+                        entry.id, json.dumps(response) if response else "{}", db_path
+                    )
                 results.append(SyncResult(entry.id, "success"))
             except httpx.HTTPStatusError as e:
                 error_msg = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
                 await mark_failed(entry.id, error_msg, db_path)
                 results.append(SyncResult(entry.id, "failed", error_msg))
                 await self._refresh_entity_from_api(entry, db_path)
-            except (httpx.ConnectError, httpx.TimeoutException):
-                await mark_failed(entry.id, "Connection lost during sync", db_path)
+            except (OfflineError, httpx.ConnectError, httpx.TimeoutException):
+                await revert_to_pending(entry.id, db_path)
                 results.append(SyncResult(entry.id, "connection_lost"))
             except Exception as e:
                 error_msg = f"{type(e).__name__}: {e}"
@@ -203,6 +233,10 @@ class SyncManager:
                 inventory = await api_client.get("/inventory")
                 if isinstance(inventory, dict):
                     await self._upsert_inventory_full(inventory, db_path)
+            elif entry.entity_type == "create_employee":
+                users = await api_client.get("/admin/users")
+                if isinstance(users, list):
+                    await repository.upsert_users(users, db_path)
             elif entry.entity_type == "job_offer" and entry.entity_id:
                 offers = await api_client.get("/admin/job-offers")
                 if isinstance(offers, list):

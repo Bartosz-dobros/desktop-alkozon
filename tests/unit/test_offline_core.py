@@ -14,6 +14,7 @@ from desktop_alkozon.core.outbox import (
     mark_completed,
     mark_failed,
     mark_in_progress,
+    revert_to_pending,
 )
 from desktop_alkozon.core.repository import (
     get_all_deliveries,
@@ -292,3 +293,13 @@ class TestOutbox:
         )
         assert entry.request_body is None
         assert entry.local_snapshot_before is None
+
+    async def test_revert_to_pending(self, initialized_db):
+        entry = await enqueue("test", "POST", "/test", db_path=initialized_db)
+        await mark_in_progress(entry.id, initialized_db)
+        updated = await get_by_id(entry.id, initialized_db)
+        assert updated.status == "in_progress"
+
+        await revert_to_pending(entry.id, initialized_db)
+        updated = await get_by_id(entry.id, initialized_db)
+        assert updated.status == "pending"

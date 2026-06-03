@@ -229,6 +229,49 @@ async def test_create_employee_account_full_flow(employees_service, mocker):
 
 
 @pytest.mark.asyncio
+async def test_create_employee_account_offline_enqueues_outbox(
+    employees_service, mocker
+):
+    from desktop_alkozon.core.exceptions import OfflineError
+
+    mocker.patch(
+        "desktop_alkozon.features.employees.service.api_client.post",
+        side_effect=OfflineError("Offline"),
+    )
+    mock_enqueue = mocker.patch(
+        "desktop_alkozon.features.employees.service.enqueue",
+    )
+
+    result = await employees_service.create_employee_account(
+        "novy@test.com", "StrongPass1!", "Jan", "Kowalski", courier=True, role="MANAGER"
+    )
+
+    assert result is None
+    mock_enqueue.assert_called_once_with(
+        "create_employee",
+        "POST",
+        "/auth/register",
+        entity_id=None,
+        request_body={
+            "register": {
+                "email": "novy@test.com",
+                "password": "StrongPass1!",
+                "firstName": "Jan",
+                "lastName": "Kowalski",
+                "ageConfirmed": True,
+                "adultConfirmed": True,
+            },
+            "update": {
+                "role": "MANAGER",
+                "active": True,
+                "courier": True,
+            },
+        },
+        db_path=mocker.ANY,
+    )
+
+
+@pytest.mark.asyncio
 async def test_create_employee_account_register_fails(employees_service, mocker):
     mocker.patch(
         "desktop_alkozon.features.employees.service.api_client.post",
