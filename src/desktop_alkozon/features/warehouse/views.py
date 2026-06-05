@@ -425,6 +425,7 @@ def _open_new_order_dialog(
     _products: list | None = None,
 ):
     line_rows: list[dict] = []
+    is_submitting = False
     lines_container = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO)
 
     note_field = ft.TextField(
@@ -535,12 +536,17 @@ def _open_new_order_dialog(
         rebuild_lines()
 
     async def submit_order(e):
-        if not line_rows:
+        nonlocal is_submitting
+        if is_submitting or not line_rows:
             status_text.value = i18n.t("warehouse.enter_product_id")
             status_text.color = ft.Colors.RED
             status_text.visible = True
             page.update()
             return
+
+        is_submitting = True
+        submit_btn.disabled = True
+        page.update()
 
         note = note_field.value.strip() if note_field.value else None
         success_count = 0
@@ -589,6 +595,11 @@ def _open_new_order_dialog(
 
     add_line(None)
 
+    submit_btn = ft.ElevatedButton(
+        i18n.t("warehouse.orders.create_button"),
+        on_click=lambda e: page.run_task(submit_order, e),
+    )
+
     dlg = ft.AlertDialog(
         modal=True,
         title=ft.Text(
@@ -618,10 +629,7 @@ def _open_new_order_dialog(
                 i18n.t("warehouse.orders.cancel"),
                 on_click=lambda e: setattr(dlg, "open", False) or page.update(),
             ),
-            ft.ElevatedButton(
-                i18n.t("warehouse.orders.create_button"),
-                on_click=lambda e: page.run_task(submit_order, e),
-            ),
+            submit_btn,
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
