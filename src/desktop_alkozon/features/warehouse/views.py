@@ -250,6 +250,7 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
     controller = WarehouseController()
     orders: list = []
     _products: list = []
+    _raw_materials: list = []
     _highest_id = 0
     loading = ft.ProgressRing(visible=True)
 
@@ -282,7 +283,7 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
         i18n.t("warehouse.orders.new_order_button"),
         icon=ft.Icons.ADD,
         on_click=lambda e: _open_new_order_dialog(
-            page, controller, load_data, _highest_id, _products
+            page, controller, load_data, _highest_id, _products, _raw_materials
         ),
     )
 
@@ -300,7 +301,7 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
         return "; ".join(parts)
 
     async def load_data():
-        nonlocal orders, _products, _highest_id
+        nonlocal orders, _products, _raw_materials, _highest_id
         try:
             loading.visible = True
             page.update()
@@ -309,6 +310,7 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
             _highest_id = max((o.id for o in orders), default=0)
 
             _products = await controller.get_products()
+            _raw_materials = await controller.get_raw_materials()
 
             pending_table.rows.clear()
             received_table.rows.clear()
@@ -423,7 +425,9 @@ def _open_new_order_dialog(
     reload_callback,
     _highest_id: int = 0,
     _products: list | None = None,
+    _raw_materials: list | None = None,
 ):
+    has_raw_materials = bool(_raw_materials)
     line_rows: list[dict] = []
     is_submitting = False
     lines_container = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO)
@@ -440,13 +444,15 @@ def _open_new_order_dialog(
     def rebuild_lines():
         lines_container.controls.clear()
         for idx, row_data in enumerate(line_rows):
-            pid_field = row_data["pid"]
+            type_dd = row_data["type_dd"]
+            pid_field = row_data["id_field"]
             qty_field = row_data["qty"]
             pick_btn = row_data["pick_btn"]
 
             line_row = ft.Row(
                 controls=[
                     ft.Text(str(idx + 1) + ".", width=25),
+                    type_dd,
                     pid_field,
                     pick_btn,
                     qty_field,
@@ -489,7 +495,11 @@ def _open_new_order_dialog(
         ]
 
         picker_dlg = ft.AlertDialog(
-            title=ft.Text("Wybierz produkt", size=18, weight=ft.FontWeight.BOLD),
+            title=ft.Text(
+                i18n.t("warehouse.orders.product"),
+                size=18,
+                weight=ft.FontWeight.BOLD,
+            ),
             content=ft.Column(
                 controls=product_controls,
                 scroll=ft.ScrollMode.AUTO,
@@ -499,7 +509,55 @@ def _open_new_order_dialog(
             ),
             actions=[
                 ft.TextButton(
-                    "Anuluj",
+                    i18n.t("warehouse.orders.cancel"),
+                    on_click=lambda e: (
+                        setattr(picker_dlg, "open", False) or page.update()
+                    ),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        page.overlay.append(picker_dlg)
+        picker_dlg.open = True
+        page.update()
+
+    def _show_raw_material_picker(rm_field):
+        def pick_raw_material(e, material_id):
+            rm_field.value = str(material_id)
+            picker_dlg.open = False
+            page.update()
+
+        material_controls = [
+            ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Text(str(m.id), weight=ft.FontWeight.BOLD, width=40),
+                        ft.Text(m.name, expand=True),
+                        ft.Text(m.unit, width=40),
+                    ]
+                ),
+                padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                on_click=lambda _, mid=m.id: pick_raw_material(_, mid),
+            )
+            for m in (_raw_materials or [])
+        ]
+
+        picker_dlg = ft.AlertDialog(
+            title=ft.Text(
+                i18n.t("warehouse.orders.pick_raw_material"),
+                size=18,
+                weight=ft.FontWeight.BOLD,
+            ),
+            content=ft.Column(
+                controls=material_controls,
+                scroll=ft.ScrollMode.AUTO,
+                width=400,
+                height=450,
+                spacing=2,
+            ),
+            actions=[
+                ft.TextButton(
+                    i18n.t("warehouse.orders.cancel"),
                     on_click=lambda e: (
                         setattr(picker_dlg, "open", False) or page.update()
                     ),
@@ -512,6 +570,23 @@ def _open_new_order_dialog(
         page.update()
 
     def add_line(e):
+        row_data: dict = {}
+
+        type_options = [
+            ft.dropdown.Option("product", i18n.t("warehouse.orders.product")),
+        ]
+        if has_raw_materials:
+            type_options.append(
+                ft.dropdown.Option(
+                    "raw_material", i18n.t("warehouse.orders.raw_material")
+                )
+            )
+        type_dd = ft.Dropdown(
+            options=type_options,
+            value="product",
+            width=120,
+            text_size=13,
+        )
         pid = ft.TextField(
             label="ID",
             width=80,
@@ -523,7 +598,6 @@ def _open_new_order_dialog(
             icon=ft.Icons.SEARCH,
             icon_size=20,
             tooltip="Wybierz produkt",
-            on_click=lambda _, pf=pid: _show_product_picker(pf),
         )
         qty = ft.TextField(
             label=i18n.t("warehouse.orders.quantity_delta"),
@@ -532,7 +606,32 @@ def _open_new_order_dialog(
             keyboard_type=ft.KeyboardType.NUMBER,
             text_size=14,
         )
-        line_rows.append({"pid": pid, "qty": qty, "pick_btn": pick_btn})
+
+        def on_type_change(e):
+            row_data["type"] = e.control.value
+            if row_data["type"] == "product":
+                pid.label = "ID"
+                pick_btn.tooltip = i18n.t("warehouse.orders.product")
+            else:
+                pid.label = i18n.t("warehouse.orders.raw_material_id")
+                pick_btn.tooltip = i18n.t("warehouse.orders.pick_raw_material")
+            page.update()
+
+        def on_pick(e):
+            if row_data["type"] == "product":
+                _show_product_picker(pid)
+            else:
+                _show_raw_material_picker(pid)
+
+        type_dd.on_change = on_type_change
+        pick_btn.on_click = on_pick
+
+        row_data["type"] = "product"
+        row_data["type_dd"] = type_dd
+        row_data["id_field"] = pid
+        row_data["pick_btn"] = pick_btn
+        row_data["qty"] = qty
+        line_rows.append(row_data)
         rebuild_lines()
 
     async def submit_order(e):
@@ -549,35 +648,45 @@ def _open_new_order_dialog(
         page.update()
 
         note = note_field.value.strip() if note_field.value else None
-        success_count = 0
-        fail_count = 0
+        lines = []
 
         for row_data in line_rows:
-            pid_val = row_data["pid"].value
+            id_val = row_data["id_field"].value
             qty_val = row_data["qty"].value
-            if not pid_val or not qty_val:
-                fail_count += 1
+            if not id_val or not qty_val:
                 continue
             try:
-                pid = int(pid_val)
-                qty = int(qty_val)
-                result = await controller.order_new_item(pid, qty, note)
-                if result:
-                    success_count += 1
+                parsed_id = int(id_val)
+                parsed_qty = int(qty_val)
+                if row_data["type"] == "product":
+                    lines.append({"productId": parsed_id, "quantityDelta": parsed_qty})
                 else:
-                    fail_count += 1
+                    lines.append(
+                        {"rawMaterialId": parsed_id, "quantityDelta": parsed_qty}
+                    )
             except ValueError:
-                fail_count += 1
+                continue
+
+        if not lines:
+            is_submitting = False
+            submit_btn.disabled = False
+            status_text.value = i18n.t("warehouse.enter_product_id")
+            status_text.color = ft.Colors.RED
+            status_text.visible = True
+            page.update()
+            return
+
+        result = await controller.create_replenishment(lines, note)
 
         dlg.open = False
         page.update()
 
-        if success_count > 0:
+        if result is not None:
             _show_snack(
                 page,
                 i18n.t("warehouse.orders.create_success"),
             )
-        if fail_count > 0:
+        else:
             if not connectivity_service.is_online():
                 _show_snack(
                     page,
@@ -608,9 +717,20 @@ def _open_new_order_dialog(
             weight=ft.FontWeight.BOLD,
         ),
         content=ft.Column(
-            width=550,
+            width=600,
             height=400,
             controls=[
+                *(
+                    [
+                        ft.Text(
+                            i18n.t("warehouse.no_raw_materials"),
+                            size=12,
+                            color=ft.Colors.AMBER,
+                        )
+                    ]
+                    if not has_raw_materials
+                    else []
+                ),
                 lines_container,
                 ft.ElevatedButton(
                     i18n.t("warehouse.orders.add_line"),

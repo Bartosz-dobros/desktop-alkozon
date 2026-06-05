@@ -27,9 +27,20 @@ class WarehouseController:
         return result.rawMaterials
 
     async def order_new_item(
-        self, product_id: int, quantity_delta: int, note: str | None = None
+        self,
+        product_id: int | None = None,
+        quantity_delta: int = 0,
+        note: str | None = None,
+        raw_material_id: int | None = None,
     ):
-        return await self.service.add_new_item(product_id, quantity_delta, note)
+        return await self.service.add_new_item(
+            product_id, quantity_delta, note, raw_material_id
+        )
+
+    async def create_replenishment(
+        self, lines: list[dict], note: str | None = None
+    ) -> WarehouseReplenishment | None:
+        return await self.service.create_replenishment(lines, note)
 
     async def update_quantity(self, item_id: int, delta: int):
         return await self.service.update_item_quantity(item_id, delta)
@@ -66,6 +77,10 @@ class WarehouseController:
         return self.get_products_sync()
 
     def order_new_item_sync(
-        self, product_id: int, quantity_delta: int, note: str | None = None
+        self,
+        product_id: int | None = None,
+        quantity_delta: int = 0,
+        note: str | None = None,
+        raw_material_id: int | None = None,
     ):
         return None

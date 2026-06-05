@@ -189,6 +189,30 @@ TRANSLATIONS = {
     "warehouse.orders.add_line": {"pl": "Dodaj pozycje", "en": "Add line"},
     "warehouse.orders.remove_line": {"pl": "Usun", "en": "Remove"},
     "warehouse.orders.cancel": {"pl": "Anuluj", "en": "Cancel"},
+    "warehouse.orders.line_type": {
+        "pl": "Typ",
+        "en": "Type",
+    },
+    "warehouse.orders.product": {
+        "pl": "Produkt",
+        "en": "Product",
+    },
+    "warehouse.orders.raw_material": {
+        "pl": "Surowiec",
+        "en": "Raw Material",
+    },
+    "warehouse.orders.pick_raw_material": {
+        "pl": "Wybierz surowiec",
+        "en": "Pick raw material",
+    },
+    "warehouse.orders.raw_material_id": {
+        "pl": "ID surowca",
+        "en": "Raw Mat. ID",
+    },
+    "warehouse.no_raw_materials": {
+        "pl": "Brak surowcow w magazynie - dostepne tylko produkty",
+        "en": "No raw materials in inventory - products only",
+    },
     "warehouse.manager_only": {
         "pl": "Tylko dla managerow",
         "en": "Manager only",

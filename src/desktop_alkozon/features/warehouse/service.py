@@ -113,14 +113,26 @@ class WarehouseService:
                         response.get("rawMaterials", []),
                         get_db_path(),
                     )
-            print(
-                f"[Warehouse] GET /inventory raw: keys={list(response.keys()) if isinstance(response, dict) else type(response).__name__}, "
-                f"rawMaterials count={len(response.get('rawMaterials', [])) if isinstance(response, dict) else 'N/A'}"
+            prods = response.get("products", [])
+            mats = response.get("rawMaterials", [])
+            prod_names = [f"{p.get('productId')}:{p.get('name')}" for p in prods[:20]]
+            mat_names = [
+                f"{m.get('id')}:{m.get('name')} ({m.get('unit')})" for m in mats[:20]
+            ]
+            print(f"[INVENTORY] products: [{', '.join(prod_names)}]")
+            print(f"[INVENTORY] rawMaterials: [{', '.join(mat_names)}]")
+            shared = set(p.get("name") for p in prods) & set(
+                m.get("name") for m in mats
             )
+            if shared:
+                print(
+                    f"[INVENTORY] WARNING: '{shared}' appear in BOTH products AND rawMaterials!"
+                )
+            if not mats:
+                print(
+                    "[INVENTORY] WARNING: rawMaterials list is EMPTY - raw material ordering will be disabled"
+                )
             parsed = InventoryOverviewResponse(**response)
-            print(
-                f"[Warehouse] GET /inventory parsed: products={len(parsed.products)}, rawMaterials={len(parsed.rawMaterials)}"
-            )
             return parsed
         except OfflineError:
             db_path = get_db_path()
@@ -186,35 +198,84 @@ class WarehouseService:
             return None
 
     def add_new_item_sync(
-        self, product_id: int, quantity_delta: int, note: str | None = None
+        self,
+        product_id: int | None = None,
+        quantity_delta: int = 0,
+        note: str | None = None,
+        raw_material_id: int | None = None,
     ):
         if auth_service.is_demo_mode():
-            return WarehouseReplenishment(
-                id=99,
-                status="PENDING",
-                note=note,
-                createdAt=datetime.now(),
-                lines=[
+            lines = []
+            if product_id is not None:
+                lines.append(
                     ReplenishmentLine(
                         id=99,
                         productId=product_id,
                         quantityDelta=quantity_delta,
                         productName=f"Product #{product_id}",
                     )
-                ],
+                )
+            if raw_material_id is not None:
+                lines.append(
+                    ReplenishmentLine(
+                        id=99,
+                        rawMaterialId=raw_material_id,
+                        quantityDelta=quantity_delta,
+                        rawMaterialName=f"Raw Material #{raw_material_id}",
+                    )
+                )
+            return WarehouseReplenishment(
+                id=99,
+                status="PENDING",
+                note=note,
+                createdAt=datetime.now(),
+                lines=lines,
             )
         return None
 
     async def add_new_item(
-        self, product_id: int, quantity_delta: int, note: str | None = None
+        self,
+        product_id: int | None = None,
+        quantity_delta: int = 0,
+        note: str | None = None,
+        raw_material_id: int | None = None,
+    ) -> WarehouseReplenishment | None:
+        lines = []
+        if product_id is not None:
+            lines.append({"productId": product_id, "quantityDelta": quantity_delta})
+        if raw_material_id is not None:
+            lines.append(
+                {"rawMaterialId": raw_material_id, "quantityDelta": quantity_delta}
+            )
+        return await self.create_replenishment(lines, note)
+
+    def _make_lines_display(self, lines: list[dict]) -> list[ReplenishmentLine]:
+        return [
+            ReplenishmentLine(
+                id=0,
+                productId=ln.get("productId"),
+                rawMaterialId=ln.get("rawMaterialId"),
+                quantityDelta=ln.get("quantityDelta", 0),
+                productName=(
+                    f"Product #{ln['productId']}" if "productId" in ln else None
+                ),
+                rawMaterialName=(
+                    f"Raw Material #{ln['rawMaterialId']}"
+                    if "rawMaterialId" in ln
+                    else None
+                ),
+            )
+            for ln in lines
+        ]
+
+    async def create_replenishment(
+        self, lines: list[dict], note: str | None = None
     ) -> WarehouseReplenishment | None:
         global _session_cache
+        payload: dict = {"lines": lines}
+        if note:
+            payload["note"] = note
         try:
-            payload = {
-                "lines": [{"productId": product_id, "quantityDelta": quantity_delta}],
-            }
-            if note:
-                payload["note"] = note
             response = await api_client.post("/warehouse/replenishment", payload)
             print(
                 f"[Warehouse] POST /warehouse/replenishment response keys={list(response.keys()) if isinstance(response, dict) else type(response).__name__}, status={response.get('status')!r}"
@@ -222,6 +283,10 @@ class WarehouseService:
             try:
                 order = _parse_order(response)
                 _session_cache.insert(0, order)
+                print(
+                    f"[REPLENISHMENT] Order #{order.id} status='{order.status}' - "
+                    f"{'auto-completed by API' if order.status and order.status.upper() in ('RECEIVED', 'COMPLETED') else 'pending - user must mark as received'}"
+                )
                 return order
             except Exception as pe:
                 print(f"[Warehouse] POST succeeded (201) but _parse_order failed: {pe}")
@@ -230,14 +295,7 @@ class WarehouseService:
                     status=response.get("status", "PENDING"),
                     note=note,
                     createdAt=datetime.now(),
-                    lines=[
-                        ReplenishmentLine(
-                            id=0,
-                            productId=product_id,
-                            quantityDelta=quantity_delta,
-                            productName=f"Product #{product_id}",
-                        )
-                    ],
+                    lines=self._make_lines_display(lines),
                 )
                 _session_cache.insert(0, fallback)
                 return fallback
@@ -271,14 +329,7 @@ class WarehouseService:
                 status="PENDING",
                 note=note,
                 createdAt=datetime.now(),
-                lines=[
-                    ReplenishmentLine(
-                        id=0,
-                        productId=product_id,
-                        quantityDelta=quantity_delta,
-                        productName=f"Product #{product_id}",
-                    )
-                ],
+                lines=self._make_lines_display(lines),
             )
             _session_cache.insert(0, fallback)
             return fallback
@@ -311,14 +362,7 @@ class WarehouseService:
                     status="PENDING",
                     note=note,
                     createdAt=datetime.now(),
-                    lines=[
-                        ReplenishmentLine(
-                            id=99,
-                            productId=product_id,
-                            quantityDelta=quantity_delta,
-                            productName=f"Product #{product_id}",
-                        )
-                    ],
+                    lines=self._make_lines_display(lines),
                 )
             return None
 
