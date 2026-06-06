@@ -6,6 +6,7 @@ import flet as ft
 
 from desktop_alkozon.core.auth import auth_service
 from desktop_alkozon.core.database import init_db
+from desktop_alkozon.core.i18n import load_language
 from desktop_alkozon.core.logger import setup_logger
 from desktop_alkozon.ui.pages.login_page import (
     create_hard_lockout_view,
@@ -36,6 +37,7 @@ def main(page: ft.Page):
 
     async def start_app():
         await init_db()
+        await load_language(page)
         if await auth_service.is_hard_locked():
             page.add(create_hard_lockout_view(page))
         else:

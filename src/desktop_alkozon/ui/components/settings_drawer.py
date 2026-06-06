@@ -2,7 +2,7 @@ from contextlib import suppress
 
 import flet as ft
 
-from desktop_alkozon.core.i18n import LANG_KEY, i18n
+from desktop_alkozon.core.i18n import i18n, save_language
 
 THEME_KEY = "alkozon_theme_mode"
 
@@ -24,20 +24,6 @@ async def _save_theme(page: ft.Page, mode: ft.ThemeMode) -> None:
         )
 
 
-async def _load_language(page: ft.Page) -> None:
-    try:
-        value = await page.shared_preferences.get(LANG_KEY)
-        if value in ("pl", "en"):
-            i18n.current_lang = value
-    except Exception:
-        pass
-
-
-async def _save_language(page: ft.Page, lang: str) -> None:
-    with suppress(Exception):
-        await page.shared_preferences.set(LANG_KEY, lang)
-
-
 def _rebuild_current_view(page: ft.Page) -> None:
     factory = getattr(page, "_rebuild_view", None)
     if factory:
@@ -50,7 +36,7 @@ def setup_theme(page: ft.Page) -> None:
     async def load_and_apply():
         mode = await _load_theme(page)
         page.theme_mode = mode
-        await _load_language(page)
+        page.drawer = make_settings_drawer(page)
         page.update()
 
     page.run_task(load_and_apply)
@@ -77,7 +63,7 @@ def make_settings_drawer(page: ft.Page) -> ft.NavigationDrawer:
     async def on_language_toggle(e: ft.ControlEvent) -> None:
         new_lang = "pl" if e.control.value else "en"
         i18n.current_lang = new_lang
-        await _save_language(page, new_lang)
+        await save_language(page, new_lang)
         await page.close_drawer()
         snack = ft.SnackBar(
             content=ft.Text(i18n.t("settings.language_changed")),
@@ -127,9 +113,9 @@ def make_settings_drawer(page: ft.Page) -> ft.NavigationDrawer:
                         ),
                         ft.Row(
                             controls=[
-                                ft.Text("PL", size=14, weight=ft.FontWeight.BOLD),
-                                lang_switch,
                                 ft.Text("EN", size=14, weight=ft.FontWeight.BOLD),
+                                lang_switch,
+                                ft.Text("PL", size=14, weight=ft.FontWeight.BOLD),
                             ],
                             alignment=ft.MainAxisAlignment.CENTER,
                         ),

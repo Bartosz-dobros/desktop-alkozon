@@ -1,3 +1,5 @@
+from contextlib import suppress
+
 LANG_KEY = "alkozon_language"
 
 TRANSLATIONS = {
@@ -536,3 +538,17 @@ class I18nService:
 
 
 i18n = I18nService.get_instance()
+
+
+async def load_language(page) -> None:
+    try:
+        value = await page.shared_preferences.get(LANG_KEY)
+        if value in ("pl", "en"):
+            i18n.current_lang = value
+    except Exception:
+        pass
+
+
+async def save_language(page, lang: str) -> None:
+    with suppress(Exception):
+        await page.shared_preferences.set(LANG_KEY, lang)
