@@ -482,26 +482,51 @@ class WarehouseService:
         order = next((o for o in history if o.id == order_id), None)
         if not order or not order.lines:
             return False
-        success = True
-        for line in order.lines:
-            if line.productId:
-                result = await self.update_item_quantity(
-                    line.productId, line.quantityDelta
-                )
-                if result is None:
-                    success = False
-            if line.rawMaterialId:
-                result = await self.update_raw_material(
-                    line.rawMaterialId, line.quantityDelta
-                )
-                if result is None:
-                    success = False
-        if success:
-            for o in _session_cache:
-                if o.id == order_id:
-                    o.status = "RECEIVED"
-                    break
-        return success
+        try:
+            await api_client.patch(
+                f"/warehouse/replenishment/{order_id}",
+                {"status": "RECEIVED"},
+            )
+        except OfflineError:
+            db_path = get_db_path()
+            for line in order.lines:
+                if line.productId:
+                    await repository.update_inventory_product_quantity(
+                        line.productId, line.quantityDelta, db_path
+                    )
+                if line.rawMaterialId:
+                    await repository.update_inventory_raw_material_quantity(
+                        line.rawMaterialId, line.quantityDelta, db_path
+                    )
+            await enqueue(
+                "replenishment_status",
+                "PATCH",
+                f"/warehouse/replenishment/{order_id}",
+                entity_id=str(order_id),
+                request_body={"status": "RECEIVED"},
+                db_path=db_path,
+            )
+        except Exception as e:
+            print(f"[Warehouse] Failed to apply replenishment: {e}")
+            return False
+        for o in _session_cache:
+            if o.id == order_id:
+                o.status = "RECEIVED"
+                break
+        with contextlib.suppress(Exception):
+            await repository.upsert_replenishments(
+                [
+                    {
+                        "id": order.id,
+                        "status": "RECEIVED",
+                        "note": order.note,
+                        "createdAt": order.createdAt.isoformat(),
+                        "lines": [ln.model_dump() for ln in (order.lines or [])],
+                    }
+                ],
+                get_db_path(),
+            )
+        return True
 
     def get_all_items_sync(self):
         if auth_service.is_demo_mode():
