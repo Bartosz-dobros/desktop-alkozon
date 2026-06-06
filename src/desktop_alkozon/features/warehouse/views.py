@@ -336,8 +336,8 @@ def create_warehouse_orders_view(page: ft.Page) -> ft.Container:
                 else:
                     action_btn = ft.ElevatedButton(
                         i18n.t("warehouse.orders.mark_received"),
-                        on_click=lambda _, oid=o.id: _mark_received(
-                            page, controller, oid, load_data
+                        on_click=lambda _, oid=o.id: page.run_task(
+                            _mark_received, page, controller, oid, load_data
                         ),
                         height=36,
                         style=ft.ButtonStyle(padding=ft.Padding(8, 4, 8, 4)),
